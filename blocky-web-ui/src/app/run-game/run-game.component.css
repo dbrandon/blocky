@@ -1,0 +1,5 @@
+
+.game-canvas {
+  width: calc(100vw - 10px);
+  height: calc(100vh - 10px);
+}
