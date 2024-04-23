@@ -1,5 +1,6 @@
 
 .game-canvas {
-  width: calc(100vw - 10px);
-  height: calc(100vh - 10px);
+  display: flex;
+  width: calc(100vw - 0px);
+  height: calc(100vh - 0px);
 }

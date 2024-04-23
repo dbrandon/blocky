@@ -3,8 +3,8 @@ import { GameCanvas } from './GameCanvas';
 
 @Component({
   selector: 'app-run-game',
-  standalone: true,
-  imports: [],
+  // standalone: true,
+  // imports: [],
   templateUrl: './run-game.component.html',
   styleUrl: './run-game.component.css'
 })

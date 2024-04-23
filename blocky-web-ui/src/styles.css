@@ -3,7 +3,10 @@
 body {
   padding: 0px;
   margin: 0px;
+  margin-bottom: -5px;
 
   width: 100vw;
   height: 100vh;
+  
+  display: flex;
 }
