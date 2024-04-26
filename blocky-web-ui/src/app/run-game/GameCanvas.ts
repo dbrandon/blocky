@@ -57,7 +57,9 @@ export class GameCanvas {
       canvas: this.canvas,
       context: gl});
     this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
-    this.renderer.setAnimationLoop(this.animation.bind(this));
+
+    requestAnimationFrame(this.requestFrame.bind(this));
+    // this.renderer.setAnimationLoop(this.animation.bind(this));
 
     const grid = new THREE.GridHelper(10, 10);
     this.scene.add(grid);
@@ -149,6 +151,10 @@ export class GameCanvas {
 
   private frame = 0;
   private repointNext = false;
+  private requestFrame(time: number) {
+    requestAnimationFrame(this.requestFrame.bind(this));
+    this.animation(time);
+  }
   animation(time: number) {
     let delta = this.prevTime == null ? 0 : time - this.prevTime;
 
@@ -205,7 +211,7 @@ export class GameCanvas {
 
     if(this.jumping) {
       this.camera.position.y += this.vy * millis;
-      this.vy -= millis * 9.8;
+      this.vy -= millis * 19.6;
       if(this.camera.position.y <= this.baseHeight) {
         this.camera.position.y = this.baseHeight;
         this.jumping = false;
@@ -351,7 +357,7 @@ export class GameCanvas {
 
     if(event.code == 'Space' && !this.jumping) {
       this.jumping = true;
-      this.vy = 2.5;
+      this.vy = 4.5;
     }
 
     if(event.code == 'KeyF') {

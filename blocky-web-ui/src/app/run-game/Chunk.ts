@@ -20,9 +20,6 @@ export class Chunk {
 
     let mat = new THREE.MeshStandardMaterial({
       color: 0x209040,
-      // polygonOffset: true,
-      // polygonOffsetFactor: 1,
-      // polygonOffsetUnits: 1
   })
     
     cube.translate(.5 + x, .5 + y, .5 + z);
