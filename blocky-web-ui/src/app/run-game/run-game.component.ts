@@ -1,7 +1,7 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
 import { GameCanvas } from './GameCanvas';
 import { DebugOverlayComponent } from '../debug-overlay/debug-overlay.component';
-import { Observable, Subscription, debounceTime, fromEvent, interval, sampleTime, take, tap } from 'rxjs';
+import { Subscription, fromEvent, interval, sampleTime } from 'rxjs';
 
 @Component({
   selector: 'app-run-game',
@@ -29,6 +29,10 @@ export class RunGameComponent {
       sampleTime(100)
     )
     .subscribe(pos => this.debugOverlay.setPosition(pos));
+
+    this.canvas.fpsObserver.pipe(
+      sampleTime(25)
+    ).subscribe(fps => this.debugOverlay.fps = Math.round(fps));
   }
 
   private handleTimer() {

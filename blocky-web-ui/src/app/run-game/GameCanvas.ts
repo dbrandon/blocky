@@ -28,6 +28,7 @@ export class GameCanvas {
   private vy = 0;
 
   private posObserver: Subject<THREE.Vector3>;
+  private fpsObserver_: Subject<number>;
 
   private traveller!: THREE.Mesh;
   private carArray: THREE.Mesh[] = [];
@@ -59,7 +60,6 @@ export class GameCanvas {
     this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
 
     requestAnimationFrame(this.requestFrame.bind(this));
-    // this.renderer.setAnimationLoop(this.animation.bind(this));
 
     const grid = new THREE.GridHelper(10, 10);
     this.scene.add(grid);
@@ -76,6 +76,7 @@ export class GameCanvas {
     window.addEventListener('resize', this.handleResize.bind(this));
 
     this.posObserver = new Subject<THREE.Vector3>();
+    this.fpsObserver_ = new Subject<number>();
 
     this.updatePosition(0, true);
 
@@ -89,7 +90,13 @@ export class GameCanvas {
     const amb = new THREE.AmbientLight(0xffffff, .05);
     this.scene.add(amb);
 
-    this.scene.add(new Chunk().group);
+    const mg = new THREE.Group();
+    for(let xx = -5; xx <= 5; xx++) {
+      for(let zz = -5; zz <=5; zz++) {
+        mg.add(new Chunk(xx, zz).group);
+      }
+    }
+    this.scene.add(mg);//new Chunk(0, 0).group);
   }
 
   private addTraveller() {
@@ -131,8 +138,8 @@ export class GameCanvas {
   private addBez() {
     this.curve = new THREE.CubicBezierCurve3(
       new THREE.Vector3( -4, 0, 0),
-      new THREE.Vector3( -2, 1, 30),
-      new THREE.Vector3( 28, -1, -2),
+      new THREE.Vector3( -2, 1, 2),
+      new THREE.Vector3(  0, -1, -2),
       new THREE.Vector3( -4, 0, 0)
     );
 
@@ -148,6 +155,9 @@ export class GameCanvas {
     return this.posObserver;
   }
 
+  get fpsObserver() {
+    return this.fpsObserver_;
+  }
 
   private frame = 0;
   private repointNext = false;
@@ -155,8 +165,26 @@ export class GameCanvas {
     requestAnimationFrame(this.requestFrame.bind(this));
     this.animation(time);
   }
-  animation(time: number) {
+
+  private frameSamples: number[] = [];
+  private animation(time: number) {
     let delta = this.prevTime == null ? 0 : time - this.prevTime;
+
+    const now = new Date().getTime();
+    this.frameSamples.push(now);
+    while(this.frameSamples.length > 0) {
+      if(this.frameSamples[0] >= (now - 1000)) {
+        break;
+      }
+      this.frameSamples.shift();
+    }
+    if(this.frameSamples.length == 0) {
+      this.fpsObserver.next(0);
+    }
+    else {
+      const diff = now - this.frameSamples[0];
+      this.fpsObserver.next(this.frameSamples.length * 1000 / diff);
+    }
 
     this.prevTime = time;
 
@@ -271,8 +299,28 @@ export class GameCanvas {
     }
   }
 
+  private dirMesh: THREE.Line | null = null;
+
   private updateTravellerPos(mesh: THREE.Mesh, frame: number, pt: THREE.Vector3) {
     mesh.position.copy(pt);
+    // This approach is simple and seems to work well enough:
+    const next = this.curve.getPoint((frame+1)/GameCanvas.FRAMES);
+    mesh.lookAt(next);
+
+    if(mesh == this.traveller) {
+      const F = 40;
+      const rot = this.curve.getTangent(frame / GameCanvas.FRAMES).normalize();
+      let f2 = frame + 100; if(f2 >= GameCanvas.FRAMES) f2 -= GameCanvas.FRAMES;
+      const n = this.curve.getPoint(f2 / GameCanvas.FRAMES);
+      const v1 = new THREE.Vector2(n.x-pt.x, n.z-pt.z).normalize();
+      const v2 = new THREE.Vector2(rot.x, rot.z).normalize();
+
+      let ang = Math.acos(v1.dot(v2));
+      ang *= (this.travellerSpeed * this.travellerSpeed);
+      if(ang > (Math.PI/2)) ang = Math.PI/2;
+      if(ang < (-Math.PI/2)) ang = -Math.PI/2;
+      mesh.rotateZ(-ang);
+    }
 
     // This travels the path but may rotate about the axis of the path.  It
     // works very well when the mesh is symmetrical about the axis but otherwise
@@ -283,20 +331,35 @@ export class GameCanvas {
     // const rad = Math.acos(up.dot(rot));
     // this.traveller.quaternion.setFromAxisAngle(axis, rad);
 
-    // This approach is simple and seems to work well enough:
-    const next = this.curve.getPoint((frame+1)/GameCanvas.FRAMES);
-    mesh.lookAt(next);
+    if(mesh == this.traveller) {
+      const rot = this.curve.getTangent(frame / GameCanvas.FRAMES).normalize();
+      const axis = new THREE.Vector3();
+      const up = new THREE.Vector3(0, 1, 0);
+      axis.crossVectors(up, rot).normalize();
+
+
+      // if(this.dirMesh != null) {
+      //   this.scene.remove(this.dirMesh);
+      //   this.dirMesh = null;
+      // }
+
+      // const pts: THREE.Vector3[] = [];
+      // // pts.push(new THREE.Vector3(pt.x, pt.y + 2, pt.z));
+      // pts.push(new THREE.Vector3(pt.x, pt.y, pt.z));
+      // // pts.push(new THREE.Vector3(pt.x + (2*axis.x), pt.y + (2*axis.y), pt.z + (2*axis.z)));
+      // // pts.push(new THREE.Vector3(pt.x, pt.y, pt.z));
+      // pts.push(new THREE.Vector3(pt.x + (2*rot.x), pt.y + (2*rot.y), pt.z + (2*rot.z)));
+      // const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      // const mat = new THREE.LineBasicMaterial( {color: 0xffff00} );
+      // this.scene.add(this.dirMesh = new THREE.Line(geo, mat));
+    }
+
     if(this.followTraveller && mesh == this.traveller) {
-      // this.camPos.add(pt);
-      // const cpt = this.camPos.average;
       this.camera.position.copy(pt);
       this.camera.position.y = pt.y + 0.1;
 
       this.posObserver.next(this.camera.position);
 
-      // const n = new THREE.Vector3();
-      // n.copy(next);
-      // n.y += 0.1;
       this.camPos.add(next);
       const cpt = this.camPos.average;
       cpt.x += 2*(next.x - cpt.x);

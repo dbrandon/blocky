@@ -11,8 +11,17 @@ import * as THREE from 'three';
 export class DebugOverlayComponent {
   private title_ = 'Hello';
   private hidden_ = false;
+  private fps_ = 0;
 
   private position_= {x: '', y: '', z: ''}
+
+  get fps() {
+    return this.fps_;
+  }
+
+  set fps(fps: number) {
+    this.fps_ = fps;
+  }
 
   get overlayHidden() {
     return this.hidden_;
