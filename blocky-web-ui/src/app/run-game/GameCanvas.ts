@@ -1,9 +1,12 @@
 
-import { Observable, Subject } from 'rxjs';
+import { Subject } from 'rxjs';
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils'
 import { PointAvg } from './PointAvg';
+import { InstancedChunkMesh } from './InstancedChunkMesh';
+import { SimpleChunkMesh } from './SimpleChunkMesh';
 import { Chunk } from './Chunk';
+import { EdgeChunkMesh } from './EdgeChunkMesh';
 
 export class GameCanvas {
   private camera: THREE.PerspectiveCamera;
@@ -68,9 +71,17 @@ export class GameCanvas {
     g2.translateY(10);
     this.scene.add(g2);
 
-    canvas.addEventListener('pointerdown', e => console.log('pdown'));
+    document.addEventListener('mousedown', this.handlePointerDown.bind(this));
     document.addEventListener('keydown', this.handleKeyDown.bind(this));
     document.addEventListener('keyup', this.handleKeyUp.bind(this));
+
+    document.body.oncontextmenu = () => {
+      return false;
+    }
+    // canvas.oncontextmenu = () => {
+    //   console.log('context disabled..');
+    //   return false;
+    // }
 
     window.addEventListener('blur', this.handleVisibilityChange.bind(this));
     window.addEventListener('resize', this.handleResize.bind(this));
@@ -85,18 +96,40 @@ export class GameCanvas {
 
     const light = new THREE.DirectionalLight(0xffffff);
     light.position.set(1, 1, 1);
+    light.castShadow = true;
+    // light.shadow.camera.visible = true;
+    // light.shadow.camera.left = -200;
+    // light.shadow.camera.right = 200;
+    // light.shadow.camera.top = 200;
+    // light.shadow.camera.bottom = -100;
+    // light.shadow.camera.far = 1000;
+
+    // if(light.shadow.map) {
+    //   light.shadow.map.width = 512;
+    //   light.shadow.map.height = 512;
+    // }
     this.scene.add(light);
 
     const amb = new THREE.AmbientLight(0xffffff, .05);
     this.scene.add(amb);
 
     const mg = new THREE.Group();
-    for(let xx = -5; xx <= 5; xx++) {
-      for(let zz = -5; zz <=5; zz++) {
-        mg.add(new Chunk(xx, zz).group);
+    for(let xx = -2; xx <= 2; xx++) {
+      for(let zz = -2; zz <=2; zz++) {
+        const chunk = new Chunk(xx, zz);
+        // mg.add(new SimpleChunkMesh(chunk).getMesh());
+        // mg.add(new InstancedChunkMesh(chunk).getMesh());
+        mg.add(new EdgeChunkMesh(chunk).getMesh());
       }
     }
-    this.scene.add(mg);//new Chunk(0, 0).group);
+
+    // mg.add(new EdgeChunkMesh(new Chunk(0, 0)).getMesh());
+    mg.castShadow = true;
+    mg.receiveShadow = true;
+    this.scene.add(mg);
+
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 
   private addTraveller() {
@@ -119,6 +152,7 @@ export class GameCanvas {
 
     this.traveller = new THREE.Mesh(cylinder, mat);
     this.traveller.position.copy(new THREE.Vector3(2, 0, 2));
+    this.traveller.castShadow = true;
     this.scene.add(this.traveller);
 
     const c2 = new THREE.CylinderGeometry(0.04, 0.06, .3, 10);
@@ -128,6 +162,7 @@ export class GameCanvas {
 
     for(let i = 0; i < 8; i++) {
       const car = new THREE.Mesh(c2, mat);
+      car.castShadow = true;
       this.carArray.push(car);
       this.scene.add(car);
     }
@@ -457,6 +492,11 @@ export class GameCanvas {
     if(event.code == 'KeyE') {
       this.strafeRight = false;
     }
+  }
+
+  private handlePointerDown(event: MouseEvent) {
+    console.log('btn: ' + event.button + ', ' + event.buttons + ', ' + event.altKey + ', ' + event.detail);
+    event.stopPropagation();
   }
 
   private handleResize(event: UIEvent) {
