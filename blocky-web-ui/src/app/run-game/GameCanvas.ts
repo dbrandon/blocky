@@ -114,8 +114,8 @@ export class GameCanvas {
     this.scene.add(amb);
 
     const mg = new THREE.Group();
-    for(let xx = -2; xx <= 2; xx++) {
-      for(let zz = -2; zz <=2; zz++) {
+    for(let xx = -8; xx <= 8; xx++) {
+      for(let zz = -8; zz <=8; zz++) {
         const chunk = new Chunk(xx, zz);
         // mg.add(new SimpleChunkMesh(chunk).getMesh());
         // mg.add(new InstancedChunkMesh(chunk).getMesh());
@@ -128,7 +128,7 @@ export class GameCanvas {
     mg.receiveShadow = true;
     this.scene.add(mg);
 
-    this.renderer.shadowMap.enabled = true;
+    // this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 

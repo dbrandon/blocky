@@ -3,12 +3,12 @@ import random from 'random';
 
 interface ChunkBlock {
   color: number;
-  above: boolean;
-  below: boolean;
-  left: boolean;
-  right: boolean;
-  front: boolean;
-  back: boolean;
+  above: ChunkBlock | null;
+  below: ChunkBlock | null;
+  left: ChunkBlock | null;
+  right: ChunkBlock | null;
+  front: ChunkBlock | null;
+  back: ChunkBlock | null;
 }
 
 export class Chunk {
@@ -29,7 +29,8 @@ export class Chunk {
         this.params_[x][y] = [];
 
         for(let z = 0; z < Chunk.Z; z++) {
-          if(Chunk.R.bool()) {
+          const add = Chunk.R.float() >= 0.05;
+          if(add) {
             this.params_[x][y][z] = this.makeBlock((x_==0&&z_==0) ? 0x809040 : 0x209040);
             this.length_++;
           }
@@ -43,12 +44,12 @@ export class Chunk {
   private makeBlock(color: number): ChunkBlock {
     return {
       color: color,
-      above: false,
-      below: false,
-      back: false,
-      front: false,
-      left: false,
-      right: false
+      above: null,
+      below: null,
+      back: null,
+      front: null,
+      left: null,
+      right: null
     }
   }
 
@@ -61,12 +62,12 @@ export class Chunk {
             continue;
           }
 
-          p.above = ((y+1) < Chunk.Y) && this.params_[x][y+1][z] != null;
-          p.back = ((z+1) < Chunk.Z) && this.params_[x][y][z+1] != null;
-          p.below = (y > 0) && this.params_[x][y-1][z] != null;
-          p.front = (z > 0) && this.params_[x][y][z-1] != null;
-          p.left = ((x+1) < Chunk.X) && this.params_[x+1][y][z] != null;
-          p.right = (x > 0) && this.params_[x-1][y][z] != null;
+          p.above = ((y+1) < Chunk.Y) ? this.params_[x][y+1][z] : null;
+          p.back = ((z+1) < Chunk.Z) ? this.params_[x][y][z+1] : null;
+          p.below = (y > 0) ? this.params_[x][y-1][z] : null;
+          p.front = (z > 0) ? this.params_[x][y][z-1] : null;
+          p.left = ((x+1) < Chunk.X) ? this.params_[x+1][y][z] : null;
+          p.right = (x > 0) ? this.params_[x-1][y][z] : null;
         }
       }
     }
