@@ -7,6 +7,7 @@ import { InstancedChunkMesh } from './InstancedChunkMesh';
 import { SimpleChunkMesh } from './SimpleChunkMesh';
 import { Chunk } from './Chunk';
 import { EdgeChunkMesh } from './EdgeChunkMesh';
+import { ChunkManager } from './ChunkManager';
 
 export class GameCanvas {
   private camera: THREE.PerspectiveCamera;
@@ -40,6 +41,8 @@ export class GameCanvas {
 
   private camPos = new PointAvg(50);
 
+  private chunkManager = new ChunkManager();
+
   constructor(private canvas: HTMLCanvasElement) {
     this.camera = new THREE.PerspectiveCamera(70, this.canvas.clientWidth / this.canvas.clientHeight, 0.01, 100);
     this.camera.position.z = 1;
@@ -72,6 +75,7 @@ export class GameCanvas {
     this.scene.add(g2);
 
     document.addEventListener('mousedown', this.handlePointerDown.bind(this));
+    document.addEventListener('mousemove', this.handleMouseMove.bind(this));
     document.addEventListener('keydown', this.handleKeyDown.bind(this));
     document.addEventListener('keyup', this.handleKeyUp.bind(this));
 
@@ -94,42 +98,93 @@ export class GameCanvas {
     this.addBez();
     this.addTraveller();
 
+    // Good information on setting up the shadow map:
+    // https://mofu-dev.com/en/blog/threejs-shadow-map/
     const light = new THREE.DirectionalLight(0xffffff);
     light.position.set(1, 1, 1);
     light.castShadow = true;
-    // light.shadow.camera.visible = true;
-    // light.shadow.camera.left = -200;
-    // light.shadow.camera.right = 200;
-    // light.shadow.camera.top = 200;
-    // light.shadow.camera.bottom = -100;
-    // light.shadow.camera.far = 1000;
 
-    // if(light.shadow.map) {
-    //   light.shadow.map.width = 512;
-    //   light.shadow.map.height = 512;
-    // }
+    const frustumSize = 20;
+    light.shadow.camera = new THREE.OrthographicCamera(
+      -frustumSize / 2,
+      frustumSize / 2,
+      frustumSize / 2,
+      -frustumSize / 2,
+      1,
+      frustumSize 
+    );
+    light.shadow.camera.position.copy(light.position);
+    light.shadow.camera.lookAt(this.scene.position);
+
+    light.shadow.mapSize.x = 2048;
+    light.shadow.mapSize.y = 2048;
+
     this.scene.add(light);
 
     const amb = new THREE.AmbientLight(0xffffff, .05);
     this.scene.add(amb);
 
-    const mg = new THREE.Group();
     for(let xx = -8; xx <= 8; xx++) {
       for(let zz = -8; zz <=8; zz++) {
         const chunk = new Chunk(xx, zz);
         // mg.add(new SimpleChunkMesh(chunk).getMesh());
         // mg.add(new InstancedChunkMesh(chunk).getMesh());
-        mg.add(new EdgeChunkMesh(chunk).getMesh());
+        this.chunkManager.add(chunk);
       }
     }
 
-    // mg.add(new EdgeChunkMesh(new Chunk(0, 0)).getMesh());
-    mg.castShadow = true;
-    mg.receiveShadow = true;
-    this.scene.add(mg);
+    // this.chunkManager.add(new Chunk(-1, 0));
+    // this.chunkManager.add(new Chunk(0, 0));
+    // mg.castShadow = true;
+    // mg.receiveShadow = true;
+    this.scene.add(this.chunkManager.mesh);
 
-    // this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    this.addCatmullRomCurve();
+  }
+
+  private addCatmullRomCurve() {
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(.5, .05, .5),
+      new THREE.Vector3(5, 2, 2),
+      new THREE.Vector3(2, 1, 5),
+      new THREE.Vector3(.5, -.8, 5.5),
+      new THREE.Vector3(-1.3, .2, 4.5),
+      new THREE.Vector3(-7, 3.5, 1.5),
+      // new THREE.Vector3(.5, .05, .5)
+    ], true);
+
+    const options: THREE.ExtrudeGeometryOptions = {
+      steps: 100,
+      bevelEnabled: false,
+      extrudePath: curve
+    }
+
+    const pts: THREE.Vector2[] = [];
+    const xx = .05;
+    const zz = .1;
+    pts.push(new THREE.Vector2(xx, zz));
+    pts.push(new THREE.Vector2(xx, -zz));
+    pts.push(new THREE.Vector2(.04, -zz));
+    pts.push(new THREE.Vector2(0.04, zz));
+
+    const shape = new THREE.Shape(pts);
+    const geometry = new THREE.ExtrudeGeometry(shape, options);
+    const mat = new THREE.MeshLambertMaterial( {color: 0x80c0, wireframe: false});
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.castShadow = true;
+    this.scene.add(mesh);
+
+    // const points = curve.getPoints(50);
+    // const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    // const mat = new THREE.LineBasicMaterial({color: 0x40ff })
+
+    // const obj = new THREE.Line(geometry, mat);
+    // this.scene.add(obj);
+
+    this.curve = curve;
   }
 
   private addTraveller() {
@@ -168,7 +223,7 @@ export class GameCanvas {
     }
   }
 
-  private curve!: THREE.CubicBezierCurve3;
+  private curve!: THREE.Curve<THREE.Vector3>;
 
   private addBez() {
     this.curve = new THREE.CubicBezierCurve3(
@@ -182,6 +237,7 @@ export class GameCanvas {
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const mat = new THREE.LineBasicMaterial( {color: 0xffff00} );
     const curveObj = new THREE.Line(geometry, mat);
+    curveObj.castShadow = true;
 
     this.scene.add(curveObj);
   }
@@ -494,9 +550,70 @@ export class GameCanvas {
     }
   }
 
+  private faceLine: THREE.Line | null = null;
+
+  private handleMouseMove(event: MouseEvent) {
+    // const x = (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1;
+    // const y = -(event.clientY / this.renderer.domElement.clientHeight) * 2 + 1;
+    // const ray = new THREE.Raycaster();
+
+    // if(this.faceLine != null) {
+    //   this.scene.remove(this.faceLine);
+    //   this.faceLine = null;
+    // }
+
+    // ray.setFromCamera(new THREE.Vector2(x, y), this.camera);
+    // const isect = ray.intersectObjects([this.chunkManager.mesh], true);
+    const isect = this.getIntersect(event);
+    // if(isect.length > 0) {
+    if(isect != null) {
+      const pts = this.chunkManager.lookup(isect);
+
+      if(pts != null) {
+        const geometry = new THREE.BufferGeometry().setFromPoints(pts);
+        const mat = new THREE.LineBasicMaterial( {
+          color: 0xff0000,
+          polygonOffset: true,
+          polygonOffsetFactor: 1,
+          polygonOffsetUnits: 1
+        });
+        this.faceLine = new THREE.Line(geometry, mat);
+        this.scene.add(this.faceLine);
+      }
+    }
+  }
+
   private handlePointerDown(event: MouseEvent) {
-    console.log('btn: ' + event.button + ', ' + event.buttons + ', ' + event.altKey + ', ' + event.detail);
+    console.log('btn: ' + event.button + ', ' + event.altKey + ', ' + event.detail);
     event.stopPropagation();
+
+    const isect = this.getIntersect(event);
+    if(isect == null) {
+      return;
+    }
+
+    if(event.button == 0) {
+      this.chunkManager.removeBlock(isect);
+    }
+    else if(event.button == 2) {
+      this.chunkManager.addBlock(isect);
+    }
+  }
+
+  private getIntersect(event: MouseEvent) {
+    const x = (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1;
+    const y = -(event.clientY / this.renderer.domElement.clientHeight) * 2 + 1;
+    const ray = new THREE.Raycaster();
+
+    if(this.faceLine != null) {
+      this.scene.remove(this.faceLine);
+      this.faceLine = null;
+    }
+
+    ray.setFromCamera(new THREE.Vector2(x, y), this.camera);
+    const isect = ray.intersectObjects([this.chunkManager.mesh], true);
+
+    return isect.length == 0 ? null : isect[0];
   }
 
   private handleResize(event: UIEvent) {

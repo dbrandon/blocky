@@ -1,5 +1,7 @@
 
 import random from 'random';
+import { sprintf } from 'sprintf-js';
+import * as THREE from 'three';
 
 interface ChunkBlock {
   color: number;
@@ -14,14 +16,14 @@ interface ChunkBlock {
 export class Chunk {
   private static R = random.clone('test-seed');
 
-  private params_ : ChunkBlock[][][] = [];
+  private params_ : (ChunkBlock|null)[][][] = [];
   private length_ = 0;
 
   static X = 8;
-  static Y = 80;
+  static Y = 2;
   static Z = 8;
 
-  constructor(private x_: number, private z_: number) {
+  constructor(private x_: number, private z_: number, sparseness = 0.5) {
     for(let x = 0; x < Chunk.X; x++) {
       this.params_[x] = [];
 
@@ -29,7 +31,7 @@ export class Chunk {
         this.params_[x][y] = [];
 
         for(let z = 0; z < Chunk.Z; z++) {
-          const add = Chunk.R.float() >= 0.05;
+          const add = Chunk.R.float() >= sparseness;
           if(add) {
             this.params_[x][y][z] = this.makeBlock((x_==0&&z_==0) ? 0x809040 : 0x209040);
             this.length_++;
@@ -79,13 +81,21 @@ export class Chunk {
     for(let x = 0; x < this.params_.length; x++) {
       for(let y = 0; y < this.params_[x].length; y++) {
         for(let z = 0; z < this.params_[x][y].length; z++) {
-          if(this.params_[x][y][z]) {
-            cb(x, y - Chunk.Y, z, n, this.params_[x][y][z]);
+          const p = this.params_[x][y][z];
+
+          if(p != null) {
+            cb(x, y - Chunk.Y, z, n, p);
             n++;
           }
         }
       }
     }
+  }
+
+  remove(location: THREE.Vector3) {
+     console.log('remove: ' + location.x + ', ' + location.y + ', ' + location.z);
+    this.params_[location.x][location.y+Chunk.Y][location.z] = null;
+    this.buildNeighbors();
   }
 
   get length() {

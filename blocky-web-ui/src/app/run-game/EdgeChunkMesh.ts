@@ -3,8 +3,18 @@ import * as THREE from 'three';
 import { ChunkMesh } from './ChunkMesh';
 import { Chunk } from './Chunk';
 
+type SideName = 'FRONT' | 'BACK' | 'LEFT' | 'RIGHT' | 'TOP' | 'BOTTOM';
+
+interface IndexLookup {
+  addr: THREE.Vector3;
+  facePoints: THREE.Vector3[];
+  sidePoints: THREE.Vector3[];
+  sideName: SideName;
+}
+
 export class EdgeChunkMesh extends ChunkMesh {
   private mesh_ : THREE.Object3D;
+  private map = new Map<number, IndexLookup>();
 
   constructor(chunk: Chunk, scalar = 1) {
     super(chunk);
@@ -52,6 +62,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
+        this.addLookups((indices.length/3)-2, new THREE.Vector3(x, y, z), vertices, 'TOP');
       }
       // front
       if(!param.front) {
@@ -70,6 +81,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
+        this.addLookups((indices.length/3)-2, new THREE.Vector3(x, y, z), vertices, 'FRONT');
       }
       // // left
       if(!param.left) {
@@ -88,6 +100,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
+        this.addLookups((indices.length/3)-2, new THREE.Vector3(x, y, z), vertices, 'LEFT');
       }
       // // back
       if(!param.back) {
@@ -106,6 +119,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
+        this.addLookups((indices.length/3)-2, new THREE.Vector3(x, y, z), vertices, 'BACK');
       }
       // // right
       if(!param.right) {
@@ -124,6 +138,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
+        this.addLookups((indices.length/3)-2, new THREE.Vector3(x, y, z), vertices, 'RIGHT');
       }
       // // bottom
       if(!param.below) {
@@ -142,6 +157,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
+        this.addLookups((indices.length/3)-2, new THREE.Vector3(x, y, z), vertices, 'BOTTOM');
       }
 
       offset[0] = o;
@@ -170,5 +186,63 @@ export class EdgeChunkMesh extends ChunkMesh {
 
   override getMesh(): THREE.Object3D<THREE.Object3DEventMap> {
     return this.mesh_;
+  }
+
+  lookupFromIndex(index: number | undefined) {
+    const lookup = index == null ? null : this.map.get(index);
+
+    if(lookup == null) {
+      return;
+    }
+
+    return lookup.sidePoints;
+  }
+
+  addBlock(index: number | undefined) {
+    return index == null ? null : this.map.get(index);
+  }
+
+  removeBlock(index: number | undefined) {
+    const lookup = index == null ? null : this.map.get(index);
+    if(lookup == null) {
+      return false;
+    }
+    this.chunk.remove(lookup.addr);
+    return true;
+  }
+
+  private addLookups(index: number, addr: THREE.Vector3, v: number[], sideName: SideName) {
+    const side: THREE.Vector3[] = [];
+    const L = v.length - 12;
+    for(let s of [0, 1, 2, 3, 0]) {
+      const i = L + (s*3);
+      side.push(new THREE.Vector3(v[i] + (this.chunk.x<<3), v[i+1], v[i+2] + (this.chunk.z<<3)));
+    }
+
+    this.map.set(index, {
+      addr: addr,
+      facePoints: this.makeFacePoints(v, true),
+      sidePoints: side,
+      sideName: sideName
+    });
+    this.map.set(index+1, {
+      addr: addr,
+      facePoints: this.makeFacePoints(v, false),
+      sidePoints: side,
+      sideName: sideName
+    })
+  }
+
+  private makeFacePoints(v: number[], one: boolean) {
+    const o = v.length - 12;
+    const set = one ? [0, 1, 2, 0] : [0, 2, 3, 0];
+    const pts: THREE.Vector3[] = [];
+
+    for(let s of set) {
+      const S = o + (s * 3);
+      pts.push(new THREE.Vector3(v[S+0], v[S+1], v[S+2]));
+    }
+
+    return pts;
   }
 }
