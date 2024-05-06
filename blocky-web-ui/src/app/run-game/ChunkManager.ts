@@ -73,7 +73,19 @@ export class ChunkManager {
   }
 
   addBlock(intersect: THREE.Intersection) {
-    
+    const [chunk, mesh] = this.getMesh(intersect);
+    const lookup = mesh?.lookupFromIndex(intersect.faceIndex);
+
+    if(chunk == null || mesh == null || lookup == null) {
+      return;
+    }
+
+    const loc = lookup.addLocation;
+    chunk.add(lookup.addLocation);
+    this.mesh_.remove(mesh?.getMesh());
+    const m = new EdgeChunkMesh(chunk);
+    this.map.set(chunk, m);
+    this.mesh_.add(m.getMesh());
   }
 
   removeBlock(intersect: THREE.Intersection) {

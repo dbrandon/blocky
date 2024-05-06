@@ -11,7 +11,7 @@ export class SimpleChunkMesh extends ChunkMesh {
 
     this.mesh_ = new THREE.Group();
     
-    chunk.iterate((x, y, z, n, c) => this.mesh_.add(this.makeCube(x, y, z)));
+    chunk.iterate((n, c) => this.mesh_.add(this.makeCube(c.x, c.y, c.z)));
   }
 
   override getMesh(): THREE.Object3D<THREE.Object3DEventMap> {

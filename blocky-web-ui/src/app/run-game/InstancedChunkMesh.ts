@@ -22,14 +22,14 @@ export class InstancedChunkMesh extends ChunkMesh {
     const cx = this.chunk.x << 3;
     const cz = this.chunk.z << 3;
 
-    chunk.iterate((x, y, z, n, param) => {
+    chunk.iterate((n, param) => {
       if(n == 0) {
         mat.color = new THREE.Color(param.color);
       }
       temp.position.set(
-        .5 + ((x + cx) * 1.1),
-        .5 + y,
-        .5 + ((z + cz) * 1.1));
+        .5 + ((param.x + cx) * 1.1),
+        .5 + param.y,
+        .5 + ((param.z + cz) * 1.1));
       temp.updateMatrix();
       this.mesh_.setMatrixAt(n, temp.matrix);
     });

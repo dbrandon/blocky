@@ -567,7 +567,7 @@ export class GameCanvas {
     const isect = this.getIntersect(event);
     // if(isect.length > 0) {
     if(isect != null) {
-      const pts = this.chunkManager.lookup(isect);
+      const pts = this.chunkManager.lookup(isect)?.sidePoints;
 
       if(pts != null) {
         const geometry = new THREE.BufferGeometry().setFromPoints(pts);
