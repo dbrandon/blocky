@@ -2,11 +2,10 @@
 import { Subject } from 'rxjs';
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils'
+import * as Line2 from 'three/examples/jsm/lines/Line2';
+import * as LineGeometry from 'three/examples/jsm/lines/LineGeometry';
+import * as LineMaterial from 'three/examples/jsm/lines/LineMaterial';
 import { PointAvg } from './PointAvg';
-import { InstancedChunkMesh } from './InstancedChunkMesh';
-import { SimpleChunkMesh } from './SimpleChunkMesh';
-import { Chunk } from './Chunk';
-import { EdgeChunkMesh } from './EdgeChunkMesh';
 import { ChunkManager } from './ChunkManager';
 
 export class GameCanvas {
@@ -124,14 +123,14 @@ export class GameCanvas {
     const amb = new THREE.AmbientLight(0xffffff, .05);
     this.scene.add(amb);
 
-    for(let xx = -8; xx <= 8; xx++) {
-      for(let zz = -8; zz <=8; zz++) {
-        const chunk = new Chunk(xx, zz);
-        // mg.add(new SimpleChunkMesh(chunk).getMesh());
-        // mg.add(new InstancedChunkMesh(chunk).getMesh());
-        this.chunkManager.add(chunk);
-      }
-    }
+    // for(let xx = -8; xx <= 8; xx++) {
+    //   for(let zz = -8; zz <=8; zz++) {
+    //     const chunk = new Chunk(xx, zz);
+    //     // mg.add(new SimpleChunkMesh(chunk).getMesh());
+    //     // mg.add(new InstancedChunkMesh(chunk).getMesh());
+    //     this.chunkManager.add(chunk);
+    //   }
+    // }
 
     // this.chunkManager.add(new Chunk(-1, 0));
     // this.chunkManager.add(new Chunk(0, 0));
@@ -550,34 +549,36 @@ export class GameCanvas {
     }
   }
 
-  private faceLine: THREE.Line | null = null;
+  private faceLine: THREE.Object3D | null = null;
 
   private handleMouseMove(event: MouseEvent) {
-    // const x = (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1;
-    // const y = -(event.clientY / this.renderer.domElement.clientHeight) * 2 + 1;
-    // const ray = new THREE.Raycaster();
-
-    // if(this.faceLine != null) {
-    //   this.scene.remove(this.faceLine);
-    //   this.faceLine = null;
-    // }
-
-    // ray.setFromCamera(new THREE.Vector2(x, y), this.camera);
-    // const isect = ray.intersectObjects([this.chunkManager.mesh], true);
     const isect = this.getIntersect(event);
-    // if(isect.length > 0) {
+
     if(isect != null) {
+      const lookup = this.chunkManager.lookup(isect);
       const pts = this.chunkManager.lookup(isect)?.sidePoints;
 
       if(pts != null) {
-        const geometry = new THREE.BufferGeometry().setFromPoints(pts);
-        const mat = new THREE.LineBasicMaterial( {
-          color: 0xff0000,
-          polygonOffset: true,
-          polygonOffsetFactor: 1,
-          polygonOffsetUnits: 1
-        });
-        this.faceLine = new THREE.Line(geometry, mat);
+        let rawpts: number[] = [];
+        for(let pt of pts) {
+          rawpts.push(pt.x, pt.y, pt.z);
+        }
+        // const geometry = new THREE.BufferGeometry().setFromPoints(pts);
+        const geometry = new LineGeometry.LineGeometry();
+        geometry.setPositions(rawpts);
+        const mat = new LineMaterial.LineMaterial({
+          color: 0xffffff,
+          linewidth: .002,
+          visible: true,
+        })
+        // const mat = new THREE.LineBasicMaterial( {
+        //   color: 0xffffff,
+        //   polygonOffset: true,
+        //   polygonOffsetFactor: 1,
+        //   polygonOffsetUnits: 1
+        // });
+        // this.faceLine = new THREE.Line(geometry, mat);
+        this.faceLine = new Line2.Line2(geometry, mat);
         this.scene.add(this.faceLine);
       }
     }
@@ -612,6 +613,10 @@ export class GameCanvas {
 
     ray.setFromCamera(new THREE.Vector2(x, y), this.camera);
     const isect = ray.intersectObjects([this.chunkManager.mesh], true);
+
+    if(isect.length == 0 || isect[0].distance > 7) {
+      return null;
+    }
 
     return isect.length == 0 ? null : isect[0];
   }

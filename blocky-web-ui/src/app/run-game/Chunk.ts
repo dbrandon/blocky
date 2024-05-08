@@ -3,7 +3,7 @@ import random from 'random';
 import { sprintf } from 'sprintf-js';
 import * as THREE from 'three';
 
-interface ChunkBlock {
+export interface ChunkBlock {
   color: number;
   x: number;
   y: number;
@@ -23,6 +23,10 @@ class ParamMap extends Map<string, ChunkBlock> {
 
   lookup(x: number, y: number, z: number) {
     return this.get(this.toKey(x, y, z));
+  }
+
+  lookupVector(v: THREE.Vector3) {
+    return this.get(this.vectorToKey(v));
   }
 
   remove(v: THREE.Vector3) {
@@ -113,7 +117,12 @@ export class Chunk {
   }
 
   add(location: THREE.Vector3) {
+    if(this.paramMap_.lookupVector(location) != null) {
+      return false;
+    }
     this.paramMap_.add(this.makeBlock(location.x, location.y, location.z, 0xFF00FF));
+    this.buildNeighbors();
+    return true;
   }
 
   remove(location: THREE.Vector3) {

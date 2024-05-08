@@ -1,7 +1,7 @@
 
 import * as THREE from 'three';
 import { ChunkMesh } from './ChunkMesh';
-import { Chunk } from './Chunk';
+import { Chunk, ChunkBlock } from './Chunk';
 
 class IndexLookup {
   constructor(
@@ -18,8 +18,10 @@ export class EdgeChunkMesh extends ChunkMesh {
   private mesh_ : THREE.Object3D;
   private map = new Map<number, IndexLookup>();
 
-  constructor(chunk: Chunk, scalar = 1) {
+  constructor(chunk: Chunk, private scalar = 1) {
     super(chunk);
+
+    if(scalar < 1) scalar = 1;
 
     this.mesh_ = new THREE.Object3D();
 
@@ -64,7 +66,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
-        this.addLookups((indices.length/3)-2, new THREE.Vector3(param.x, param.y, param.z), new THREE.Vector3(param.x, param.y+1, param.z), vertices);
+        this.addLookups((indices.length/3)-2,  param, normals, vertices);
       }
       // front
       if(!param.front) {
@@ -83,7 +85,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
-        this.addLookups((indices.length/3)-2, new THREE.Vector3(param.x, param.y, param.z), new THREE.Vector3(param.x-1, param.y, param.z), vertices);
+        this.addLookups((indices.length/3)-2, param, normals, vertices);
       }
       // // left
       if(!param.left) {
@@ -102,7 +104,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
-        this.addLookups((indices.length/3)-2, new THREE.Vector3(param.x, param.y, param.z), new THREE.Vector3(param.x, param.y, param.z+1), vertices);
+        this.addLookups((indices.length/3)-2,  param, normals, vertices);
       }
       // // back
       if(!param.back) {
@@ -121,7 +123,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
-        this.addLookups((indices.length/3)-2, new THREE.Vector3(param.x, param.y, param.z), new THREE.Vector3(param.x+1, param.y, param.z), vertices);
+        this.addLookups((indices.length/3)-2,  param, normals, vertices);
       }
       // // right
       if(!param.right) {
@@ -140,7 +142,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
-        this.addLookups((indices.length/3)-2, new THREE.Vector3(param.x, param.y, param.z), new THREE.Vector3(param.x, param.y, param.z-1), vertices);
+        this.addLookups((indices.length/3)-2,  param, normals, vertices);
       }
       // // bottom
       if(!param.below) {
@@ -159,7 +161,7 @@ export class EdgeChunkMesh extends ChunkMesh {
         indices.push(o, o+1, o+2);
         indices.push(o, o+2, o+3);
         o += 4;
-        this.addLookups((indices.length/3)-2, new THREE.Vector3(param.x, param.y, param.z), new THREE.Vector3(param.x, param.y-1, param.z), vertices);
+        this.addLookups((indices.length/3)-2, param, normals, vertices);
       }
 
       offset[0] = o;
@@ -173,7 +175,7 @@ export class EdgeChunkMesh extends ChunkMesh {
 
     const mat = new THREE.MeshLambertMaterial({
       vertexColors: true,
-      // side: THREE.DoubleSide
+      side: scalar > 1 ? THREE.DoubleSide : THREE.FrontSide
     });
     this.mesh_ = new THREE.Mesh(geometry, mat);
     this.mesh_.position.x = (this.chunk.x << 3) * scalar;
@@ -213,12 +215,19 @@ export class EdgeChunkMesh extends ChunkMesh {
     return true;
   }
 
-  private addLookups(index: number, location: THREE.Vector3, addLocation: THREE.Vector3, v: number[]) {
+  private addLookups(index: number, params: ChunkBlock, normals: number[], v: number[]) {
     const side: THREE.Vector3[] = [];
     const L = v.length - 12;
+    const cx = (this.chunk.x<<3) * this.scalar;
+    const cz = (this.chunk.z<<3) * this.scalar;
+    const norm = new THREE.Vector3(normals[L], normals[L+1], normals[L+2]);
+    const location = new THREE.Vector3(params.x, params.y, params.z);
+    const addLocation = location.clone().add(norm);
+
+    const soffset = norm.clone().multiplyScalar(.0001);
     for(let s of [0, 1, 2, 3, 0]) {
       const i = L + (s*3);
-      side.push(new THREE.Vector3(v[i] + (this.chunk.x<<3), v[i+1], v[i+2] + (this.chunk.z<<3)));
+      side.push(new THREE.Vector3(v[i] + cx, v[i+1], v[i+2] + cz).add(soffset));
     }
 
     this.map.set(index, {
