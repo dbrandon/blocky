@@ -28,7 +28,7 @@ export class RunGameComponent {
     this.canvas.positionObserver.pipe(
       sampleTime(100)
     )
-    .subscribe(pos => this.debugOverlay.setPosition(pos));
+    .subscribe(info => this.debugOverlay.setPositionInfo(info));
 
     this.canvas.fpsObserver.pipe(
       sampleTime(25)

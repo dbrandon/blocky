@@ -8,6 +8,15 @@ import * as LineMaterial from 'three/examples/jsm/lines/LineMaterial';
 import { PointAvg } from './PointAvg';
 import { ChunkManager } from './ChunkManager';
 
+export class PosInfo {
+  constructor(
+    public position: THREE.Vector3,
+    public heading: number
+  ) {
+
+  }
+}
+
 export class GameCanvas {
   private camera: THREE.PerspectiveCamera;
   private geometry: THREE.BoxGeometry;
@@ -30,7 +39,7 @@ export class GameCanvas {
   private jumping = false;
   private vy = 0;
 
-  private posObserver: Subject<THREE.Vector3>;
+  private posObserver: Subject<PosInfo>;
   private fpsObserver_: Subject<number>;
 
   private traveller!: THREE.Mesh;
@@ -89,7 +98,7 @@ export class GameCanvas {
     window.addEventListener('blur', this.handleVisibilityChange.bind(this));
     window.addEventListener('resize', this.handleResize.bind(this));
 
-    this.posObserver = new Subject<THREE.Vector3>();
+    this.posObserver = new Subject<PosInfo>();
     this.fpsObserver_ = new Subject<number>();
 
     this.updatePosition(0, true);
@@ -345,7 +354,9 @@ export class GameCanvas {
         this.camera.position.y + Math.sin(this.pitch),// - this.baseHeight,
         this.camera.position.z + (Math.sin(this.heading) * yc)
       ))
-      this.posObserver.next(new THREE.Vector3(this.camera.position.x, this.camera.position.y, this.camera.position.z));
+      this.posObserver.next(new PosInfo(
+        new THREE.Vector3(this.camera.position.x, this.camera.position.y, this.camera.position.z),
+        this.heading));
     }
   }
 
@@ -448,7 +459,7 @@ export class GameCanvas {
       this.camera.position.copy(pt);
       this.camera.position.y = pt.y + 0.1;
 
-      this.posObserver.next(this.camera.position);
+      this.posObserver.next(new PosInfo(this.camera.position.clone(), this.heading));
 
       this.camPos.add(next);
       const cpt = this.camPos.average;
