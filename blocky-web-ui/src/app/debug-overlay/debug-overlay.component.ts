@@ -16,6 +16,15 @@ export class DebugOverlayComponent {
 
   private position_= {x: '', y: '', z: ''}
   private heading_ = '';
+  private distToTarget_ = 'N/A';
+
+  get distToTarget() {
+    return this.distToTarget_;
+  }
+
+  setDistToTarget(dist: number|undefined) {
+    this.distToTarget_ = (dist == undefined) ? 'N/A' : sprintf('%.4f', dist);
+  }
 
   get fps() {
     return this.fps_;

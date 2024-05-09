@@ -7,6 +7,7 @@ import * as LineGeometry from 'three/examples/jsm/lines/LineGeometry';
 import * as LineMaterial from 'three/examples/jsm/lines/LineMaterial';
 import { PointAvg } from './PointAvg';
 import { ChunkManager } from './ChunkManager';
+import { EntityManager } from './EntityManager';
 
 export class PosInfo {
   constructor(
@@ -34,13 +35,14 @@ export class GameCanvas {
   private strafeRight = false;
   private strafeLeft = false;
 
-  private heading = -Math.PI/2;
+  private heading = 0;
   private pitch = 0;
   private jumping = false;
   private vy = 0;
 
   private posObserver: Subject<PosInfo>;
   private fpsObserver_: Subject<number>;
+  public distObserver = new Subject<number|undefined>();
 
   private traveller!: THREE.Mesh;
   private carArray: THREE.Mesh[] = [];
@@ -50,6 +52,7 @@ export class GameCanvas {
   private camPos = new PointAvg(50);
 
   private chunkManager = new ChunkManager();
+  private entityManager;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.camera = new THREE.PerspectiveCamera(70, this.canvas.clientWidth / this.canvas.clientHeight, 0.01, 100);
@@ -101,8 +104,6 @@ export class GameCanvas {
     this.posObserver = new Subject<PosInfo>();
     this.fpsObserver_ = new Subject<number>();
 
-    this.updatePosition(0, true);
-
     this.addBez();
     this.addTraveller();
 
@@ -132,25 +133,16 @@ export class GameCanvas {
     const amb = new THREE.AmbientLight(0xffffff, .05);
     this.scene.add(amb);
 
-    // for(let xx = -8; xx <= 8; xx++) {
-    //   for(let zz = -8; zz <=8; zz++) {
-    //     const chunk = new Chunk(xx, zz);
-    //     // mg.add(new SimpleChunkMesh(chunk).getMesh());
-    //     // mg.add(new InstancedChunkMesh(chunk).getMesh());
-    //     this.chunkManager.add(chunk);
-    //   }
-    // }
-
-    // this.chunkManager.add(new Chunk(-1, 0));
-    // this.chunkManager.add(new Chunk(0, 0));
-    // mg.castShadow = true;
-    // mg.receiveShadow = true;
     this.scene.add(this.chunkManager.mesh);
 
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.entityManager = new EntityManager(this.scene);
+    this.entityManager.setPlayerPosition(new THREE.Vector3(2, 0, 2), 0);
+
+    // this.renderer.shadowMap.enabled = true;
+    // this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.addCatmullRomCurve();
+    this.updatePosition(0, true);
   }
 
   private addCatmullRomCurve() {
@@ -161,7 +153,6 @@ export class GameCanvas {
       new THREE.Vector3(.5, -.8, 5.5),
       new THREE.Vector3(-1.3, .2, 4.5),
       new THREE.Vector3(-7, 3.5, 1.5),
-      // new THREE.Vector3(.5, .05, .5)
     ], true);
 
     const options: THREE.ExtrudeGeometryOptions = {
@@ -302,6 +293,9 @@ export class GameCanvas {
   private camSpeed = 2.5;
 
   private updatePosition(millis: number, repoint?: boolean) {
+    const distance = this.entityManager.getDistanceTo(this.chunkManager.mesh);
+    this.distObserver.next(distance);
+
     if(repoint == null) {
       repoint = false;
     }
@@ -357,6 +351,8 @@ export class GameCanvas {
       this.posObserver.next(new PosInfo(
         new THREE.Vector3(this.camera.position.x, this.camera.position.y, this.camera.position.z),
         this.heading));
+
+      this.entityManager.setPlayerPosition(this.camera.position, this.heading);
     }
   }
 
@@ -604,12 +600,15 @@ export class GameCanvas {
       return;
     }
 
+    const now = performance.now();
     if(event.button == 0) {
       this.chunkManager.removeBlock(isect);
     }
     else if(event.button == 2) {
       this.chunkManager.addBlock(isect);
     }
+    const duration = performance.now() - now;
+    console.log('click time: ' + duration);
   }
 
   private getIntersect(event: MouseEvent) {

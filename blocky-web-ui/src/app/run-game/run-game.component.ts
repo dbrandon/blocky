@@ -33,6 +33,10 @@ export class RunGameComponent {
     this.canvas.fpsObserver.pipe(
       sampleTime(25)
     ).subscribe(fps => this.debugOverlay.fps = Math.round(fps));
+
+    this.canvas.distObserver.pipe(
+      sampleTime(100)
+    ).subscribe(dist => this.debugOverlay.setDistToTarget(dist));
   }
 
   private handleTimer() {
