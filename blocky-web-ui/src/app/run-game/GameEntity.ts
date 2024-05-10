@@ -1,4 +1,5 @@
 
+import { Subject } from 'rxjs';
 import * as THREE from 'three';
 
 export class GameEntity {
@@ -11,6 +12,9 @@ export class GameEntity {
 
   private wireframeMesh_ : THREE.Mesh;
 
+  public distObserver_ = new Subject<number|undefined>();
+
+
   // Method for generating points on a sphere for firing rays for
   // object avoidance:
   //
@@ -18,7 +22,7 @@ export class GameEntity {
   constructor() {
     this.size_ = new THREE.Vector3(.8, .8, .8);
     this.wireframeMesh_ = this.createWireframeMesh();
-    this.position = new THREE.Vector3(0, 0, 0);
+    this.position = new THREE.Vector3(1, 1.8, 1);
   }
 
   private createWireframeMesh() {
@@ -29,6 +33,32 @@ export class GameEntity {
     })
 
     return new THREE.Mesh(geo, mat);
+  }
+
+  get distObserver() {
+    return this.distObserver_;
+  }
+
+  adjustPositionUpdate(next: THREE.Vector3, mesh: THREE.Object3D) {
+    const dirVect = next.clone().sub(this.position_).normalize();
+    const ray = new THREE.Raycaster(this.position_, dirVect);
+    const result = ray.intersectObject(mesh);
+
+    if(result.length > 0) {
+      const dist = this.position_.distanceTo(next);
+      this.distObserver_.next(result[0].distance);
+
+      if(dist >= result[0].distance) {
+        // return result[0].point.clone().add(dirVect.multiplyScalar(-.2));
+        const pt = this.position_.clone();
+        pt.add(dirVect.multiplyScalar(result[0].distance * .9));
+        return pt;
+      }
+
+      return next;
+    }
+    this.distObserver_.next(undefined);
+    return next;
   }
 
   getDistanceTo(mesh: THREE.Object3D) {

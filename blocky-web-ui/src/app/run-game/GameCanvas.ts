@@ -42,7 +42,6 @@ export class GameCanvas {
 
   private posObserver: Subject<PosInfo>;
   private fpsObserver_: Subject<number>;
-  public distObserver = new Subject<number|undefined>();
 
   private traveller!: THREE.Mesh;
   private carArray: THREE.Mesh[] = [];
@@ -56,8 +55,9 @@ export class GameCanvas {
 
   constructor(private canvas: HTMLCanvasElement) {
     this.camera = new THREE.PerspectiveCamera(70, this.canvas.clientWidth / this.canvas.clientHeight, 0.01, 100);
+    this.camera.position.x = 1;
     this.camera.position.z = 1;
-    this.camera.position.y = .2;
+    this.camera.position.y = 1.8;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x002040);
@@ -292,9 +292,15 @@ export class GameCanvas {
   private baseHeight = 1.8;
   private camSpeed = 2.5;
 
+  get distObserver() {
+    return this.entityManager.distObserver;
+  }
+
   private updatePosition(millis: number, repoint?: boolean) {
-    const distance = this.entityManager.getDistanceTo(this.chunkManager.mesh);
-    this.distObserver.next(distance);
+    // const distance = this.entityManager.getDistanceTo(this.chunkManager.mesh);
+    // this.distObserver.next(distance);
+
+    const newPosition = this.camera.position.clone();
 
     if(repoint == null) {
       repoint = false;
@@ -309,32 +315,32 @@ export class GameCanvas {
     }
 
     if(this.strafeLeft) {
-      this.camera.position.z += this.camSpeed * millis * Math.sin(this.heading - Math.PI/2);
-      this.camera.position.x += this.camSpeed * millis * Math.cos(this.heading - Math.PI/2);
+      newPosition.z += this.camSpeed * millis * Math.sin(this.heading - Math.PI/2);
+      newPosition.x += this.camSpeed * millis * Math.cos(this.heading - Math.PI/2);
       repoint = true;
     }
     if(this.strafeRight) {
-      this.camera.position.z += this.camSpeed * millis * Math.sin(this.heading + Math.PI/2);
-      this.camera.position.x += this.camSpeed * millis * Math.cos(this.heading + Math.PI/2);
+      newPosition.z += this.camSpeed * millis * Math.sin(this.heading + Math.PI/2);
+      newPosition.x += this.camSpeed * millis * Math.cos(this.heading + Math.PI/2);
       repoint = true;
     }
 
     if(this.gofwd) {
-      this.camera.position.z += this.camSpeed * millis * Math.sin(this.heading);
-      this.camera.position.x += this.camSpeed * millis * Math.cos(this.heading);
+      newPosition.z += this.camSpeed * millis * Math.sin(this.heading);
+      newPosition.x += this.camSpeed * millis * Math.cos(this.heading);
       repoint = true;
     }
     if(this.goback) {
-      this.camera.position.z -= this.camSpeed * millis * Math.sin(this.heading);
-      this.camera.position.x -= this.camSpeed * millis * Math.cos(this.heading);
+      newPosition.z -= this.camSpeed * millis * Math.sin(this.heading);
+      newPosition.x -= this.camSpeed * millis * Math.cos(this.heading);
       repoint = true;
     }
 
     if(this.jumping) {
-      this.camera.position.y += this.vy * millis;
+      newPosition.y += this.vy * millis;
       this.vy -= millis * 19.6;
-      if(this.camera.position.y <= this.baseHeight) {
-        this.camera.position.y = this.baseHeight;
+      if(newPosition.y <= this.baseHeight) {
+        newPosition.y = this.baseHeight;
         this.jumping = false;
       }
       repoint = true;
@@ -343,6 +349,9 @@ export class GameCanvas {
     if(repoint) {
       const p = (this.pitch == Math.PI/2 ? (Math.PI/2-.001) : (this.pitch == (-Math.PI/2) ? (-Math.PI/2 + 0.001) : this.pitch));
       const yc = Math.cos(p);
+
+      const np = this.entityManager.adjustPositionUpdate(newPosition, this.chunkManager.mesh);
+      this.camera.position.copy(np);
       this.camera.lookAt(new THREE.Vector3(
         this.camera.position.x + (Math.cos(this.heading) * yc),
         this.camera.position.y + Math.sin(this.pitch),// - this.baseHeight,

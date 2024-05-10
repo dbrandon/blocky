@@ -17,6 +17,14 @@ export class EntityManager {
     return this.player_.wireframe;
   }
 
+  get distObserver() {
+    return this.player_.distObserver;
+  }
+
+  adjustPositionUpdate(cur: THREE.Vector3, mesh: THREE.Object3D) {
+    return this.player_.adjustPositionUpdate(cur, mesh);
+  }
+
   setPlayerPosition(position: THREE.Vector3, heading: number) {
     this.player_.position = position;
     this.player_.heading = heading;
