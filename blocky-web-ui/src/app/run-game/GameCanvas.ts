@@ -93,10 +93,6 @@ export class GameCanvas {
     document.body.oncontextmenu = () => {
       return false;
     }
-    // canvas.oncontextmenu = () => {
-    //   console.log('context disabled..');
-    //   return false;
-    // }
 
     window.addEventListener('blur', this.handleVisibilityChange.bind(this));
     window.addEventListener('resize', this.handleResize.bind(this));
