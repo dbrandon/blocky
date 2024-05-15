@@ -2,6 +2,7 @@
 import random from 'random';
 import { sprintf } from 'sprintf-js';
 import * as THREE from 'three';
+import { ChunkManager } from './ChunkManager';
 
 export interface ChunkBlock {
   color: number;
@@ -49,7 +50,7 @@ export class Chunk {
   private length_ = 0;
 
   static X = 8;
-  static YMIN = -2;
+  static YMIN = -80;
   static YMAX = 0;
   static Z = 8;
 
@@ -61,16 +62,16 @@ export class Chunk {
     for(let x = 0; x < Chunk.X; x++) {
       for(let y = Chunk.YMIN; y < Chunk.YMAX; y++) {
         for(let z = 0; z < Chunk.Z; z++) {
-          const add = Chunk.R.float() >= sparseness;
-          if(add) {
+          // const add = Chunk.R.float() >= sparseness;
+          // if(add) {
             this.paramMap_.add(this.makeBlock(x, y, z, (x_==0&&z_==0) ? 0x809040 : 0x209040));
             this.length_++;
-          }
+          // }
         }
       }
     }
 
-    this.buildNeighbors();
+    // this.buildNeighbors();
   }
 
   private makeBlock(x: number, y: number, z: number, color: number): ChunkBlock {
@@ -88,20 +89,55 @@ export class Chunk {
     }
   }
 
-  buildNeighbors() {
+  buildNeighbors(manager: ChunkManager) {
     for(let key of this.paramMap_.keys()) {
       const p = this.paramMap_.get(key);
       if(p == null) {
         continue;
       }
 
-      p.above = this.paramMap_.lookup(p.x, p.y+1, p.z);
-      p.back = this.paramMap_.lookup(p.x, p.y, p.z+1);
-      p.below = this.paramMap_.lookup(p.x, p.y-1, p.z);
-      p.front = this.paramMap_.lookup(p.x, p.y, p.z-1);
-      p.left = this.paramMap_.lookup(p.x+1, p.y, p.z);
-      p.right = this.paramMap_.lookup(p.x-1, p.y, p.z);
+      p.above = this.findBlock(p.x, p.y+1, p.z, manager);
+      p.back = this.findBlock(p.x, p.y, p.z+1, manager);
+      p.below = this.findBlock(p.x, p.y-1, p.z, manager);
+      p.front = this.findBlock(p.x, p.y, p.z-1, manager);
+      p.left = this.findBlock(p.x+1, p.y, p.z, manager);
+      p.right = this.findBlock(p.x-1, p.y, p.z, manager);
+      // p.above = this.paramMap_.lookup(p.x, p.y+1, p.z);
+      // p.back = this.paramMap_.lookup(p.x, p.y, p.z+1);
+      // p.below = this.paramMap_.lookup(p.x, p.y-1, p.z);
+      // p.front = this.paramMap_.lookup(p.x, p.y, p.z-1);
+      // p.left = this.paramMap_.lookup(p.x+1, p.y, p.z);
+      // p.right = this.paramMap_.lookup(p.x-1, p.y, p.z);
     }
+  }
+
+  private findBlock(x: number, y: number, z: number, manager: ChunkManager) {
+    let chunk: Chunk|undefined = this;
+    let cx = this.x;
+    let cz = this.z;
+
+    if(x < 0) {
+      x += Chunk.X;
+      cx--;
+    }
+    else if(x >= Chunk.X) {
+      x -= Chunk.X;
+      cx++;
+    }
+    if(z < 0) {
+      z += Chunk.Z;
+      cz--;
+    }
+    else if(z >= Chunk.Z) {
+      z -= Chunk.Z;
+      cz++;
+    }
+
+    if(cx != this.x || cz != this.z) {
+      chunk = manager.getChunk(cx, cz);
+    }
+
+    return chunk?.paramMap_.lookup(x, y, z);
   }
 
   iterate(cb: (n: number, param: ChunkBlock) => void) {
@@ -116,19 +152,19 @@ export class Chunk {
     }
   }
 
-  add(location: THREE.Vector3) {
+  add(location: THREE.Vector3, manager: ChunkManager) {
     if(this.paramMap_.lookupVector(location) != null) {
       return false;
     }
     this.paramMap_.add(this.makeBlock(location.x, location.y, location.z, 0xFF00FF));
-    this.buildNeighbors();
+    this.buildNeighbors(manager);
     return true;
   }
 
-  remove(location: THREE.Vector3) {
+  remove(location: THREE.Vector3, manager: ChunkManager) {
     console.log('remove: ' + location.x + ', ' + location.y + ', ' + location.z);
     this.paramMap_.remove(location);
-    this.buildNeighbors();
+    this.buildNeighbors(manager);
   }
 
   get length() {

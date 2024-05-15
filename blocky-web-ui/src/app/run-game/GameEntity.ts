@@ -1,5 +1,6 @@
 
 import { Subject } from 'rxjs';
+import { sprintf } from 'sprintf-js';
 import * as THREE from 'three';
 
 export class GameEntity {
@@ -20,9 +21,9 @@ export class GameEntity {
   //
   // https://stackoverflow.com/questions/9600801/evenly-distributing-n-points-on-a-sphere/44164075#44164075
   constructor() {
-    this.size_ = new THREE.Vector3(.8, .8, .8);
+    this.size_ = new THREE.Vector3(.6, .6, .6);
     this.wireframeMesh_ = this.createWireframeMesh();
-    this.position = new THREE.Vector3(1, 1.8, 1);
+    this.position = new THREE.Vector3(1, 3, 1);
   }
 
   private createWireframeMesh() {
@@ -39,26 +40,56 @@ export class GameEntity {
     return this.distObserver_;
   }
 
+  v2str(v: THREE.Vector3) {
+    return sprintf('[%7.4f, %7.4f, %7.4f]', v.x, v.y, v.z);
+  }
+
   adjustPositionUpdate(next: THREE.Vector3, mesh: THREE.Object3D) {
-    const dirVect = next.clone().sub(this.position_).normalize();
-    const ray = new THREE.Raycaster(this.position_, dirVect);
-    const result = ray.intersectObject(mesh);
+    let target = next.clone();
+    let pos = this.position_.clone();
+    let ray = new THREE.Raycaster();
+    let sentDist = false;
+    pos.y += 0.0001;
+    target.y += 0.0001;
 
-    if(result.length > 0) {
-      const dist = this.position_.distanceTo(next);
-      this.distObserver_.next(result[0].distance);
+    for(;;) {
+      const dir = target.clone().sub(pos);
+      ray.set(pos, dir.clone().normalize());
+      const result = ray.intersectObject(mesh);
 
-      if(dist >= result[0].distance) {
-        // return result[0].point.clone().add(dirVect.multiplyScalar(-.2));
-        const pt = this.position_.clone();
-        pt.add(dirVect.multiplyScalar(result[0].distance * .9));
-        return pt;
+      if(result.length == 0) {
+        break;
       }
 
-      return next;
+      const dist = pos.distanceTo(next);
+      if(dist <= result[0].distance) {
+        this.distObserver_.next(result[0].distance);
+        sentDist = true;
+        break;
+      }
+
+      const norm = result[0].normal;
+      if(!norm) {
+        break;
+      }
+
+      const proj = dir.clone().projectOnPlane(norm);
+      // if(proj.length() < 0.000001) {
+      //   this.distObserver_.next(0);
+      //   sentDist = true;
+      //   break;
+      // }
+      pos = result[0].point;
+      target = pos.clone().add(proj);
     }
-    this.distObserver_.next(undefined);
-    return next;
+
+    if(!sentDist) {
+      this.distObserver_.next(undefined);
+    }
+
+    this.position = target;
+
+    return target;
   }
 
   getDistanceTo(mesh: THREE.Object3D) {
@@ -90,14 +121,19 @@ export class GameEntity {
     this.wireframeMesh_.rotation.y = -heading;
   }
 
+  get cameraPosition() {
+    const pos = this.position_.clone();
+    pos.y += 1.5;
+    return pos;
+  }
+
   get position() {
-    return this.position_;
+    return this.position_.clone();
   }
 
   set position(position: THREE.Vector3) {
     this.position_ = position.clone();
     this.wireframeMesh_.position.set(position.x, position.y, position.z);
-    // = new THREE.Vector3(position.x, position.y, position.z);
   }
 
   get wireframe() {

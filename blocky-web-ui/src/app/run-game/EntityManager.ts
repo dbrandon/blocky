@@ -13,6 +13,14 @@ export class EntityManager {
     console.log('added player wireframe');
   }
 
+  getPlayerPosition() {
+    return this.player_.position;
+  }
+
+  getPlayerCameraPosition() {
+    return this.player_.cameraPosition;
+  }
+
   getPlayerWireframe() {
     return this.player_.wireframe;
   }

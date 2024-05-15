@@ -53,7 +53,7 @@ export class DebugOverlayComponent {
   setPositionInfo(info: PosInfo) {
     this.position_ = {
       x: sprintf('%.4f', info.position.x),
-      y: sprintf('%.4f', info.position.y),
+      y: sprintf('%.12f', info.position.y),
       z: sprintf('%.4f', info.position.z)
     }
     this.heading_ = sprintf('%.4f', (180 * info.heading)/Math.PI);

@@ -7,6 +7,7 @@ import { sprintf } from 'sprintf-js';
 export class ChunkManager {
   // private chunks_: Chunk[] = [];
   private mesh_: THREE.Group;
+  private collisionMesh_: THREE.Group;
   private dirty_ = false;
 
   private chunkMap_ = new Map<string, Chunk>();
@@ -14,35 +15,34 @@ export class ChunkManager {
 
   constructor() {
     this.mesh_ = new THREE.Group();
+    this.collisionMesh_ = new THREE.Group();
 
-    // for(let xx = -8; xx <= 8; xx++) {
-    //   for(let zz = -8; zz <= 8; zz++) {
-    //     this.chunks_.push(new Chunk(xx, zz));
-    //   }
-    // }
+    for(let xx = -5; xx < 5; xx++) {
+      for(let zz = -5; zz < 5; zz++) {
+        this.addChunk(new Chunk(xx, zz));
+      }
+    }
 
-    this.addChunk(new Chunk(0, 0));
-    this.addChunk(new Chunk(-1, 0));
-
-    // this.chunks_.push(new Chunk(0, 0));
-    this.dirty_ = true;
+    // this.addChunk(new Chunk(0, 0));
+    // this.addChunk(new Chunk(-1, 0));
   }
 
   private addChunk(chunk: Chunk) {
     this.chunkMap_.set('' + chunk.x + ':' + chunk.z, chunk);
+    this.dirty_ = true;
   }
 
-  private findChunk(point: THREE.Vector3) {
-    for(let chunk of this.chunkMap_.values()) {
-      const xm = chunk.x << 3;
-      const zm = chunk.z << 3;
+  getChunk(x: number, z: number) {
+    return this.chunkMap_.get('' + x + ':' + z);
+  }
 
-      if(point.x >= xm && point.x < (xm+8) && point.z >= zm && point.z < (zm+8)) {
-        return chunk;
-      }
+  getEdgeMesh(x: number, z: number) {
+    const chunk = this.getChunk(x, z);
+
+    if(chunk) {
+      return this.map.get(chunk);
     }
-
-    return null;
+    return undefined;
   }
 
   private lookupChunk(intersect: THREE.Intersection) {
@@ -95,22 +95,50 @@ export class ChunkManager {
     }
 
     [loc, chunk, mesh] = this.adjustChunk(chunk, lookup.addLocation);
-    if(chunk == null || loc == null) {
+    if(chunk == null || loc == null || mesh == null) {
       console.log('attempt to add outside of valid chunk boundary');
       return;
     }
 
-    if(!chunk.add(loc)) {
+    if(!chunk.add(loc, this)) {
       console.log('chunk already has block at location');
       return;
     }
 
-    if(mesh != null) {
-      this.mesh_.remove(mesh.getMesh());
+    const rebuilds = this.getAffectedNeighbors(mesh, loc.x, loc.z);
+    this.rebuildMeshes(rebuilds);
+  }
+
+  getAffectedNeighbors(mesh: EdgeChunkMesh, x: number, z: number) {
+    const neighbors = [mesh];
+    let m: EdgeChunkMesh|undefined;
+
+    if(x == (Chunk.X-1)) {
+      m = this.getEdgeMesh(mesh.chunk.x + 1, mesh.chunk.z);
+      if(m) {
+        neighbors.push(m);
+      }
     }
-    const m = new EdgeChunkMesh(chunk);
-    this.map.set(chunk, m);
-    this.mesh_.add(m.getMesh());
+    if( x == 0) {
+      m = this.getEdgeMesh(mesh.chunk.x - 1, mesh.chunk.z);
+      if(m) {
+        neighbors.push(m);
+      }
+    }
+    if(z == (Chunk.Z-1)) {
+      m = this.getEdgeMesh(mesh.chunk.x, mesh.chunk.z + 1);
+      if(m) {
+        neighbors.push(m);
+      }
+    }
+    if(z == 0) {
+      m = this.getEdgeMesh(mesh.chunk.x, mesh.chunk.z - 1);
+      if(m) {
+        neighbors.push(m);
+      }
+    }
+
+    return neighbors;
   }
 
   private adjustChunk(chunk: Chunk, location: THREE.Vector3): [null|THREE.Vector3, null|Chunk, null|EdgeChunkMesh] {
@@ -154,12 +182,22 @@ export class ChunkManager {
       return;
     }
 
-    if(mesh.removeBlock(intersect.faceIndex)) {
-      this.mesh_.remove(mesh.getMesh());
-      const m = new EdgeChunkMesh(chunk);
-      this.map.set(chunk, m);
-      this.mesh_.add(m.getMesh());
+    const lookup = mesh.lookupFromIndex(intersect.faceIndex);
+    if(lookup == null) {
+      return false;
     }
+
+    chunk.remove(lookup.location, this);
+    this.rebuildMeshes(this.getAffectedNeighbors(mesh, lookup.location.x, lookup.location.z));
+
+    return true;
+  }
+
+  get collisionMesh() {
+    if(this.dirty_) {
+      this.rebuild();
+    }
+    return this.collisionMesh_;
   }
 
   get mesh(): THREE.Object3D {
@@ -169,14 +207,29 @@ export class ChunkManager {
     return this.mesh_;
   }
 
+  private rebuildMeshes(list: EdgeChunkMesh[]) {
+    for(let mesh of list) {
+      mesh.chunk.buildNeighbors(this);
+      this.mesh_.remove(mesh.getMesh());
+      this.collisionMesh_.remove(mesh.getCollisionMesh());
+      const m = new EdgeChunkMesh(mesh.chunk);
+      this.map.set(mesh.chunk, m);
+      this.mesh_.add(m.getMesh());
+      this.collisionMesh_.add(m.getCollisionMesh());
+    }
+  }
+
   private rebuild() {
     this.mesh_.clear();
+    this.collisionMesh_.clear();
     this.map.clear();
 
     for(let chunk of this.chunkMap_.values()) {
+      chunk.buildNeighbors(this);
       const m = new EdgeChunkMesh(chunk);
       this.mesh_.add(m.getMesh());
       this.map.set(chunk, m);
+      this.collisionMesh_.add(m.getCollisionMesh());
     }
     this.dirty_ = false;
   }
