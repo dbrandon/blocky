@@ -3,6 +3,36 @@ import { Subject } from 'rxjs';
 import { sprintf } from 'sprintf-js';
 import * as THREE from 'three';
 
+class SamplePoint {
+  private dir_!: THREE.Vector3;
+
+  constructor(private offset_: number, public pos: THREE.Vector3, public target: THREE.Vector3) {
+    this.set(pos, target);
+  }
+
+  get dir() {
+    return this.dir_;
+  }
+
+  set(pos: THREE.Vector3, target: THREE.Vector3) {
+    this.pos = pos.clone();
+    this.target = target.clone();
+    this.pos.y += this.offset_;
+    this.target.y += this.offset_;
+
+    this.dir_ = this.target.clone().sub(this.pos);
+  }
+
+  update(sample: SamplePoint, point: THREE.Vector3, norm: THREE.Vector3, proj: THREE.Vector3) {
+    this.pos = point.clone();
+    this.pos.y -= (sample.offset_ - this.offset_);
+    this.pos.add(norm.clone().multiplyScalar(.0001));
+    this.target = this.pos.clone().add(proj);
+
+    this.dir_ = this.target.clone().sub(this.pos);
+}
+}
+
 export class GameEntity {
   private size_ : THREE.Vector3;
   private position_ = new THREE.Vector3(0, 0, 0);
@@ -12,6 +42,8 @@ export class GameEntity {
   private vy_ = 0;
 
   private wireframeMesh_ : THREE.Mesh;
+
+  private applyPushback_ = true;
 
   public distObserver_ = new Subject<number|undefined>();
 
@@ -44,52 +76,67 @@ export class GameEntity {
     return sprintf('[%7.4f, %7.4f, %7.4f]', v.x, v.y, v.z);
   }
 
-  adjustPositionUpdate(next: THREE.Vector3, mesh: THREE.Object3D) {
-    let target = next.clone();
-    let pos = this.position_.clone();
+  adjustPositionUpdate(next: THREE.Vector3, mesh: THREE.Object3D[]) {
+    // let target = next.clone();
+    // let pos = this.position_.clone();
     let ray = new THREE.Raycaster();
     let sentDist = false;
-    pos.y += 0.0001;
-    target.y += 0.0001;
+
+    let samplePts = [
+      new SamplePoint(0, this.position_, next),
+      // new SamplePoint(1.3, this.position_, next)
+    ];
 
     for(;;) {
-      const dir = target.clone().sub(pos);
-      ray.set(pos, dir.clone().normalize());
-      const result = ray.intersectObject(mesh);
+      let bestResult: THREE.Intersection[] = [];
+      let sample: SamplePoint|undefined;
 
-      if(result.length == 0) {
+      for(let pt of samplePts) {
+        ray.set(pt.pos, pt.dir.clone().normalize());
+        const result = ray.intersectObjects(mesh);
+
+        if(result.length == 0) {
+          continue;
+        }
+        if(bestResult.length == 0 || bestResult[0].distance > result[0].distance) {
+          bestResult = result;
+          sample = pt;
+        }
+      }
+
+      if(bestResult.length == 0 || sample === undefined) {
         break;
       }
 
-      const dist = pos.distanceTo(next);
-      if(dist <= result[0].distance) {
-        this.distObserver_.next(result[0].distance);
+      const dist = sample.pos.distanceTo(sample.target);
+      if(dist <= bestResult[0].distance) {
+        this.distObserver_.next(bestResult[0].distance);
         sentDist = true;
         break;
       }
 
-      const norm = result[0].normal;
+      const norm = bestResult[0].normal;
       if(!norm) {
         break;
       }
 
-      const proj = dir.clone().projectOnPlane(norm);
-      // if(proj.length() < 0.000001) {
-      //   this.distObserver_.next(0);
-      //   sentDist = true;
-      //   break;
-      // }
-      pos = result[0].point;
-      target = pos.clone().add(proj);
+      const proj = sample.dir.clone().projectOnPlane(norm);
+      for(let pt of samplePts) {
+        pt.update(sample, bestResult[0].point, norm, proj);
+      }
+
+      if(samplePts[0].dir.length() == 0) {
+        break;
+      }
     }
 
     if(!sentDist) {
       this.distObserver_.next(undefined);
     }
 
-    this.position = target;
+    this.position = samplePts[0].target;
 
-    return target;
+    return this.position_.clone();
   }
 
   getDistanceTo(mesh: THREE.Object3D) {

@@ -29,7 +29,7 @@ export class EntityManager {
     return this.player_.distObserver;
   }
 
-  adjustPositionUpdate(cur: THREE.Vector3, mesh: THREE.Object3D) {
+  adjustPositionUpdate(cur: THREE.Vector3, mesh: THREE.Object3D[]) {
     return this.player_.adjustPositionUpdate(cur, mesh);
   }
 

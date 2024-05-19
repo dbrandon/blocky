@@ -9,17 +9,29 @@ export class EdgeChunkMesh extends ChunkMesh {
   private mesh_ : THREE.Object3D;
 
   private collisionMesh_ : THREE.Object3D;
+  private static texture = new THREE.TextureLoader().load('/assets/kennynl/voxel_pack/spritesheet_tiles.png');
+  private static firstLoad = true;
 
   constructor(chunk: Chunk, private scalar = 1) {
     super(chunk);
 
     if(scalar < 1) scalar = 1;
 
+    if(EdgeChunkMesh.firstLoad) {
+      EdgeChunkMesh.firstLoad = false;
+      EdgeChunkMesh.texture.colorSpace = THREE.SRGBColorSpace;
+      EdgeChunkMesh.texture.wrapS = THREE.RepeatWrapping;
+      EdgeChunkMesh.texture.wrapT = THREE.RepeatWrapping;
+    }
+
     this.geometry_ = new EdgeChunkGeometry(chunk, scalar);
-    const mat = new THREE.MeshLambertMaterial({
-      vertexColors: true,
-      side: scalar > 1 ? THREE.DoubleSide : THREE.FrontSide
-    });
+    // const mat = new THREE.MeshLambertMaterial({
+    //   vertexColors: true,
+    //   side: scalar > 1 ? THREE.DoubleSide : THREE.FrontSide
+    // });
+    const mat = new THREE.MeshPhongMaterial({
+      map: EdgeChunkMesh.texture,
+    })
     this.mesh_ = new THREE.Mesh(this.geometry_.meshGeometry, mat);
     this.mesh_.position.x = (this.chunk.x << 3) * scalar;
     this.mesh_.position.z = (this.chunk.z << 3) * scalar;

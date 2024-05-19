@@ -21,7 +21,7 @@ export class PosInfo {
 export class GameCanvas {
   private camera: THREE.PerspectiveCamera;
   private geometry: THREE.BoxGeometry;
-  private material: THREE.MeshNormalMaterial;
+  // private material: THREE.MeshNormalMaterial;
   private mesh: THREE.Mesh;
   private scene: THREE.Scene;
   private renderer: THREE.WebGLRenderer;
@@ -54,19 +54,17 @@ export class GameCanvas {
   private entityManager;
 
   constructor(private canvas: HTMLCanvasElement) {
-    this.camera = new THREE.PerspectiveCamera(70, this.canvas.clientWidth / this.canvas.clientHeight, 0.01, 100);
-    // this.camera.position.x = 1;
-    // this.camera.position.z = 1;
-    // this.camera.position.y = .4;
+    this.camera = new THREE.PerspectiveCamera(45, this.canvas.clientWidth / this.canvas.clientHeight, 0.01, 100);
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x002040);
 
     this.geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-    this.material = new THREE.MeshNormalMaterial();
 
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    this.mesh = new THREE.Mesh(this.geometry, new THREE.MeshNormalMaterial());
     this.scene.add(this.mesh);
+
+    this.addTexturedObject();
 
     const gl = this.canvas.getContext('webgl2') as WebGL2RenderingContext;
 
@@ -131,7 +129,7 @@ export class GameCanvas {
 
     this.scene.add(this.chunkManager.mesh);
     this.scene.add(this.chunkManager.collisionMesh);
-    // this.chunkManager.collisionMesh.visible = false;
+    this.chunkManager.collisionMesh.visible = false;
 
     this.entityManager = new EntityManager(this.scene);
 
@@ -141,6 +139,47 @@ export class GameCanvas {
     this.addCatmullRomCurve();
     this.updatePosition(0);
   }
+
+  private addTexturedObject() {
+    let loader = new THREE.TextureLoader();
+    let texture = loader.load('/assets/kennynl/voxel_pack/spritesheet_tiles.png');
+    texture.colorSpace = THREE.SRGBColorSpace;
+    let boxMat = new THREE.MeshPhongMaterial({
+      map: texture,
+      side: THREE.DoubleSide,
+      transparent: true
+    })
+
+    let positions = new Float32Array([
+      2, 3, 2,
+      3, 3, 2,
+      3, 2, 2,
+      2, 2, 2
+    ])
+    let normals = new Float32Array([
+      0, 0, 1,
+      0, 0, 1,
+      0, 0, 1,
+      0, 0, 1
+    ])
+
+    const n = 1/9;
+    let uv = new Float32Array([
+      3*n, 0.5,
+      2*n, 0.5,
+      2*n, 0.4,
+      3*n, 0.4
+    ])
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setIndex([0, 1, 2, 0, 2, 3])
+    this.scene.add(new THREE.Mesh(geo, boxMat));
+  }
+
+  private curveRail!: THREE.Object3D;
 
   private addCatmullRomCurve() {
     const curve = new THREE.CatmullRomCurve3([
@@ -172,6 +211,7 @@ export class GameCanvas {
     const mesh = new THREE.Mesh(geometry, mat);
     mesh.castShadow = true;
     this.scene.add(mesh);
+    this.curveRail = mesh;
 
     // const points = curve.getPoints(50);
     // const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -277,7 +317,9 @@ export class GameCanvas {
     this.mesh.rotation.x = time / 2000;
     this.mesh.rotation.y = time / 1000;
 
-    this.updatePosition(delta / 1000);
+    if(!this.followTraveller) {
+      this.updatePosition(delta / 1000);
+    }
 
     this.updateTraveller(delta / 1000);
 
@@ -306,6 +348,12 @@ export class GameCanvas {
     if(this.rotRight) {
       this.heading += millis * Math.PI / 1.8;
     }
+    if(this.heading < 0) {
+      this.heading += (2*Math.PI);
+    }
+    if(this.heading >= (2*Math.PI)) {
+      this.heading -= (2*Math.PI);
+    }
 
     if(this.strafeLeft) {
       newPosition.z += this.camSpeed * millis * Math.sin(this.heading - Math.PI/2);
@@ -331,23 +379,23 @@ export class GameCanvas {
     const p = (this.pitch == Math.PI/2 ? (Math.PI/2-.001) : (this.pitch == (-Math.PI/2) ? (-Math.PI/2 + 0.001) : this.pitch));
     const yc = Math.cos(p);
 
-    const np = this.entityManager.adjustPositionUpdate(newPosition, this.chunkManager.collisionMesh);
+    const np = this.entityManager.adjustPositionUpdate(newPosition, [this.chunkManager.collisionMesh]);
     const dvy = origy - np.y;
     if(dvy == 0) {
       this.jumping = false;
       this.vy = 0;
     }
     this.camera.position.copy(this.entityManager.getPlayerCameraPosition());
-    this.camera.lookAt(new THREE.Vector3(
+    const lookAt = new THREE.Vector3(
       this.camera.position.x + (Math.cos(this.heading) * yc),
-      this.camera.position.y + Math.sin(this.pitch),// - this.baseHeight,
-      this.camera.position.z + (Math.sin(this.heading) * yc)
-    ))
+      this.camera.position.y + Math.sin(this.pitch),
+      this.camera.position.z + (Math.sin(this.heading) * yc));
+    this.camera.lookAt(lookAt);
+
+    this.chunkManager.setLocation(np);
     this.posObserver.next(new PosInfo(
       new THREE.Vector3(this.camera.position.x, this.camera.position.y, this.camera.position.z),
       this.heading));
-
-    // this.entityManager.setPlayerPosition(this.camera.position, this.heading);
   }
 
   private static FRAMES = 5000;
@@ -562,22 +610,22 @@ export class GameCanvas {
         for(let pt of pts) {
           rawpts.push(pt.x, pt.y, pt.z);
         }
-        // const geometry = new THREE.BufferGeometry().setFromPoints(pts);
-        const geometry = new LineGeometry.LineGeometry();
-        geometry.setPositions(rawpts);
-        const mat = new LineMaterial.LineMaterial({
-          color: 0xffffff,
-          linewidth: .002,
-          visible: true,
-        })
-        // const mat = new THREE.LineBasicMaterial( {
+        // const geometry = new LineGeometry.LineGeometry();
+        // geometry.setPositions(rawpts);
+        // const mat = new LineMaterial.LineMaterial({
         //   color: 0xffffff,
-        //   polygonOffset: true,
-        //   polygonOffsetFactor: 1,
-        //   polygonOffsetUnits: 1
-        // });
-        // this.faceLine = new THREE.Line(geometry, mat);
-        this.faceLine = new Line2.Line2(geometry, mat);
+        //   linewidth: .002,
+        //   visible: true,
+        // })
+        // this.faceLine = new Line2.Line2(geometry, mat);
+        const geometry = new THREE.BufferGeometry().setFromPoints(pts);
+        const mat = new THREE.LineBasicMaterial( {
+          color: 0xffffff,
+          polygonOffset: true,
+          polygonOffsetFactor: 1,
+          polygonOffsetUnits: 1
+        });
+        this.faceLine = new THREE.Line(geometry, mat);
         this.scene.add(this.faceLine);
       }
     }
@@ -616,7 +664,7 @@ export class GameCanvas {
     }
 
     ray.setFromCamera(new THREE.Vector2(x, y), this.camera);
-    const isect = ray.intersectObjects([this.chunkManager.mesh], true);
+    const isect = ray.intersectObjects(this.chunkManager.getSelectionMesh(this.entityManager.getPlayerPosition()), true);
 
     if(isect.length == 0 || isect[0].distance > 7) {
       return null;

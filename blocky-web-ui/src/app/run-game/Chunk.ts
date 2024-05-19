@@ -9,6 +9,7 @@ export interface ChunkBlock {
   x: number;
   y: number;
   z: number;
+  uvLookup: number[][];
   above: ChunkBlock | undefined;
   below: ChunkBlock | undefined;
   left: ChunkBlock | undefined;
@@ -54,29 +55,65 @@ export class Chunk {
   static YMAX = 0;
   static Z = 8;
 
+  private uvGrassBlock: number[][];
+  private uvDirtBlock: number[][];
+  private uvStoneBlock: number[][];
+  private uvCoalBlock: number[][];
+
   private static toKey(x: number, y: number, z:number) {
     return '' + x + ':' + y + ':' + z;
   }
 
-  constructor(private x_: number, private z_: number, sparseness = 0.5) {
+  constructor(private x_: number, private z_: number, sparseness = 0.05) {
+    const sideUv = this.makeUvs(7, 5);
+    const dirtUv = this.makeUvs(7, 4);
+    const stoneUv = this.makeUvs(3, 5);
+    const coal1 = this.makeUvs(3, 8);
+    const coal2 = this.makeUvs(3, 9);
+
+    this.uvGrassBlock = [
+      this.makeUvs(6, 8),
+      dirtUv,
+      sideUv, sideUv, sideUv, sideUv
+    ];
+
+    this.uvDirtBlock = [ dirtUv, dirtUv, dirtUv, dirtUv, dirtUv, dirtUv ];
+    this.uvStoneBlock = [ stoneUv, stoneUv, stoneUv, stoneUv, stoneUv, stoneUv ];
+    this.uvCoalBlock = [ coal1, coal2, coal1, coal2, coal1, coal2 ];
+
     for(let x = 0; x < Chunk.X; x++) {
       for(let y = Chunk.YMIN; y < Chunk.YMAX; y++) {
         for(let z = 0; z < Chunk.Z; z++) {
-          // const add = Chunk.R.float() >= sparseness;
-          // if(add) {
-            this.paramMap_.add(this.makeBlock(x, y, z, (x_==0&&z_==0) ? 0x809040 : 0x209040));
+          const r = Chunk.R.float();
+          const add = r >= sparseness;
+          if(add) {
+            let uv = this.uvGrassBlock;
+            if(y < -3) {
+              uv = (r > .8) ? this.uvCoalBlock : this.uvStoneBlock;
+            }
+            else if(y < -1) {
+              uv = this.uvDirtBlock
+            }
+            this.paramMap_.add(this.makeBlock(x, y, z, (x_==0&&z_==0) ? 0x809040 : 0x209040, uv));
             this.length_++;
-          // }
+          }
         }
       }
     }
-
-    // this.buildNeighbors();
   }
 
-  private makeBlock(x: number, y: number, z: number, color: number): ChunkBlock {
+  private makeUvs(u: number, v: number) {
+    const voff = 1.5 / (10*128);
+    const [u0, u1]= [u/9 + (1/(9*128)), (u+1)/9 - (1/(9*128))];
+    const [v0, v1] = [v/10 + voff, (v+1)/10 - voff];
+
+    return [ u1, v1,  u0, v1,  u0, v0,   u1, v0 ];
+  }
+
+  private makeBlock(x: number, y: number, z: number, color: number, uvLookup: number[][]): ChunkBlock {
     return {
       color: color,
+      uvLookup: uvLookup,
       x: x,
       y: y,
       z: z,
@@ -102,17 +139,10 @@ export class Chunk {
       p.front = this.findBlock(p.x, p.y, p.z-1, manager);
       p.left = this.findBlock(p.x+1, p.y, p.z, manager);
       p.right = this.findBlock(p.x-1, p.y, p.z, manager);
-      // p.above = this.paramMap_.lookup(p.x, p.y+1, p.z);
-      // p.back = this.paramMap_.lookup(p.x, p.y, p.z+1);
-      // p.below = this.paramMap_.lookup(p.x, p.y-1, p.z);
-      // p.front = this.paramMap_.lookup(p.x, p.y, p.z-1);
-      // p.left = this.paramMap_.lookup(p.x+1, p.y, p.z);
-      // p.right = this.paramMap_.lookup(p.x-1, p.y, p.z);
     }
   }
 
   private findBlock(x: number, y: number, z: number, manager: ChunkManager) {
-    let chunk: Chunk|undefined = this;
     let cx = this.x;
     let cz = this.z;
 
@@ -133,11 +163,11 @@ export class Chunk {
       cz++;
     }
 
-    if(cx != this.x || cz != this.z) {
-      chunk = manager.getChunk(cx, cz);
+    if(cx == this.x && cz == this.z) {
+      return this.paramMap_.lookup(x, y, z);
     }
 
-    return chunk?.paramMap_.lookup(x, y, z);
+    return manager.getChunk(cx, cz)?.chunk.paramMap_.lookup(x, y, z);
   }
 
   iterate(cb: (n: number, param: ChunkBlock) => void) {
@@ -156,13 +186,14 @@ export class Chunk {
     if(this.paramMap_.lookupVector(location) != null) {
       return false;
     }
-    this.paramMap_.add(this.makeBlock(location.x, location.y, location.z, 0xFF00FF));
+
+    const uv = location.y < 0 ? this.uvDirtBlock : this.uvGrassBlock;
+    this.paramMap_.add(this.makeBlock(location.x, location.y, location.z, 0xFF00FF, uv));
     this.buildNeighbors(manager);
     return true;
   }
 
   remove(location: THREE.Vector3, manager: ChunkManager) {
-    console.log('remove: ' + location.x + ', ' + location.y + ', ' + location.z);
     this.paramMap_.remove(location);
     this.buildNeighbors(manager);
   }

@@ -17,7 +17,8 @@ class EdgeGeoBuilder {
   normals: number[] = [];
   vertices: number[] = [];
   colors: number[] = [];
-  useColor = true;
+  uvs: number[] = [];
+  useColor = false;
   size = .5;
   offset = 0;
 
@@ -45,22 +46,22 @@ class EdgeGeoBuilder {
       const center = new THREE.Vector3((params.x * this.scalar)+.5, (params.y * this.scalar) + .5, (params.z * this.scalar) + .5);
 
       if(!params.above) {
-        this.addFace(center, [0, 1, 0], [0, 1, 2, 3], params);
+        this.addFace(center, [0, 1, 0], [1, 2, 3, 0], 0, params);
       }
       if(!params.below) {
-        this.addFace(center, [0, -1, 0], [4, 7, 6, 5], params);
+        this.addFace(center, [0, -1, 0], [4, 7, 6, 5], 1, params);
       }
       if(!params.front) {
-        this.addFace(center, [0, 0, -1], [0, 3, 7, 4], params);
+        this.addFace(center, [0, 0, -1], [0, 3, 7, 4], 2, params);
       }
       if(!params.back) {
-        this.addFace(center, [0, 0, 1], [2, 1, 5, 6], params);
+        this.addFace(center, [0, 0, 1], [2, 1, 5, 6], 3, params);
       }
       if(!params.right) {
-        this.addFace(center, [-1, 0, 0], [1, 0, 4, 5], params);
+        this.addFace(center, [-1, 0, 0], [1, 0, 4, 5], 4, params);
       }
       if(!params.left) {
-        this.addFace(center, [1, 0, 0], [3, 2, 6, 7], params);
+        this.addFace(center, [1, 0, 0], [3, 2, 6, 7], 5, params);
       }
     });
 
@@ -70,6 +71,7 @@ class EdgeGeoBuilder {
       geometry_.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.colors), 3));
     }
     geometry_.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(this.normals), 3));
+    geometry_.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(this.uvs), 2));
     geometry_.setIndex(this.indices);
 
     return geometry_;
@@ -79,6 +81,7 @@ class EdgeGeoBuilder {
     center: THREE.Vector3,
     normal: number[],
     pts: number[],
+    faceNum: number,
     params: ChunkBlock
   ) {
     for(let p of pts) {
@@ -95,6 +98,10 @@ class EdgeGeoBuilder {
       else {
         this.colors.push(this.dirt.r, this.dirt.g, this.dirt.b);
       }
+    }
+
+    for(let u = 0; u < params.uvLookup[faceNum].length; u++) {
+      this.uvs.push(params.uvLookup[faceNum][u]);
     }
 
     const o = this.offset;
