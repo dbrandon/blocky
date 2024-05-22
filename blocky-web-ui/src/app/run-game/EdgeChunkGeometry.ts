@@ -171,30 +171,48 @@ class EdgeGeoBuilder {
 }
 
 export class EdgeChunkGeometry {
-  private meshGeometry_: THREE.BufferGeometry;
-  private collisionGeometry_: THREE.BufferGeometry;
+  static Y = 8;
+
+  private meshMap_ = new Map<number, THREE.BufferGeometry>();
+  private collisionMap_ = new Map<number, THREE.BufferGeometry>();
 
   constructor(chunk: Chunk, scalar: number, map: Map<number, EdgeIndexLookup>) {
-    const geoBuilder = new EdgeGeoBuilder(chunk, scalar, map);
-    const colBuilder = new EdgeGeoBuilder(chunk, scalar);
-
-    colBuilder.useUvs = false;
-    colBuilder.size = 0.7999;
+    const visMap = new Map<number, EdgeGeoBuilder>();
+    const colMap = new Map<number, EdgeGeoBuilder>();
 
     chunk.iterate((n, params) => {
-      geoBuilder.addBlock(params);
-      colBuilder.addBlock(params);
+      const y = Math.floor(params.y / EdgeChunkGeometry.Y);
+      let col = colMap.get(y);
+      let vis = visMap.get(y);
+
+      if(!vis) {
+        vis = new EdgeGeoBuilder(chunk, scalar, map);
+        visMap.set(y, vis);
+      }
+      if(!col) {
+        col = new EdgeGeoBuilder(chunk, scalar);
+        col.useUvs = false;
+        col.size = 0.7999;
+        colMap.set(y, col);
+      }
+
+      vis.addBlock(params);
+      col.addBlock(params);
     });
 
-    this.meshGeometry_ = geoBuilder.build();
-    this.collisionGeometry_ = colBuilder.build();
+    visMap.forEach((val, key) => {
+      this.meshMap_.set(key, val.build());
+    })
+    colMap.forEach((val, key) => {
+      this.collisionMap_.set(key, val.build());
+    })
   }
 
-  get collisionGeometry() {
-    return this.collisionGeometry_;
+  get collisioNMap() {
+    return this.collisionMap_;
   }
 
-  get meshGeometry() {
-    return this.meshGeometry_;
+  get meshMap() {
+    return this.meshMap_;
   }
 }

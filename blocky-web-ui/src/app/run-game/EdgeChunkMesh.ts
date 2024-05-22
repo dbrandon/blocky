@@ -32,6 +32,7 @@ export class EdgeChunkMesh extends ChunkMesh {
   }
 
   containsObject(object: THREE.Object3D) {
+    console.log('test: length=' + this.mesh_.children.length);
     for(let i = 0; i < this.mesh_.children.length; i++) {
       if(this.mesh_.children[i] == object) {
         return true;
@@ -53,18 +54,22 @@ export class EdgeChunkMesh extends ChunkMesh {
     })
 
     this.mesh_.clear();
-    const mesh = new THREE.Mesh(geometry.meshGeometry, mat);
-    mesh.position.x = (this.chunk.x << 3) * this.scalar;
-    mesh.position.z = (this.chunk.z << 3) * this.scalar;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    this.mesh_.add(mesh);
-
+    for(let geo of geometry.meshMap.values()) {
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.x = (this.chunk.x << 3) * this.scalar;
+      mesh.position.z = (this.chunk.z << 3) * this.scalar;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.mesh_.add(mesh);
+    }
+ 
     this.collisionMesh_.clear();
-    const cmesh = new THREE.Mesh(geometry.collisionGeometry, EdgeChunkMesh.COLLISION_MAT);
-    cmesh.position.x = (this.chunk.x << 3) * this.scalar;
-    cmesh.position.z = (this.chunk.z << 3) * this.scalar;
-    this.collisionMesh_.add(cmesh);
+    for(let geo of geometry.collisioNMap.values()) {
+      const cmesh = new THREE.Mesh(geo, EdgeChunkMesh.COLLISION_MAT);
+      cmesh.position.x = (this.chunk.x << 3) * this.scalar;
+      cmesh.position.z = (this.chunk.z << 3) * this.scalar;
+      this.collisionMesh_.add(cmesh);
+    }
   }
 
   getVariance() {
