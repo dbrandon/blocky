@@ -16,9 +16,10 @@ class EdgeGeoBuilder {
   indices: number[] = [];
   normals: number[] = [];
   vertices: number[] = [];
-  colors: number[] = [];
+  // colors: number[] = [];
   uvs: number[] = [];
-  useColor = false;
+  useUvs = true;
+  // useColor = false;
   size = .5;
   offset = 0;
 
@@ -41,37 +42,39 @@ class EdgeGeoBuilder {
 
   }
 
+  addBlock(params: ChunkBlock) {
+    const center = new THREE.Vector3((params.x * this.scalar)+.5, (params.y * this.scalar) + .5, (params.z * this.scalar) + .5);
+
+    if(!params.above) {
+      this.addFace(center, [0, 1, 0], [1, 2, 3, 0], 0, params);
+    }
+    if(!params.below) {
+      this.addFace(center, [0, -1, 0], [4, 7, 6, 5], 1, params);
+    }
+    if(!params.front) {
+      this.addFace(center, [0, 0, -1], [0, 3, 7, 4], 2, params);
+    }
+    if(!params.back) {
+      this.addFace(center, [0, 0, 1], [2, 1, 5, 6], 3, params);
+    }
+    if(!params.right) {
+      this.addFace(center, [-1, 0, 0], [1, 0, 4, 5], 4, params);
+    }
+    if(!params.left) {
+      this.addFace(center, [1, 0, 0], [3, 2, 6, 7], 5, params);
+    }
+  }
+
   build() {
-    this.chunk.iterate((n, params) => {
-      const center = new THREE.Vector3((params.x * this.scalar)+.5, (params.y * this.scalar) + .5, (params.z * this.scalar) + .5);
-
-      if(!params.above) {
-        this.addFace(center, [0, 1, 0], [1, 2, 3, 0], 0, params);
-      }
-      if(!params.below) {
-        this.addFace(center, [0, -1, 0], [4, 7, 6, 5], 1, params);
-      }
-      if(!params.front) {
-        this.addFace(center, [0, 0, -1], [0, 3, 7, 4], 2, params);
-      }
-      if(!params.back) {
-        this.addFace(center, [0, 0, 1], [2, 1, 5, 6], 3, params);
-      }
-      if(!params.right) {
-        this.addFace(center, [-1, 0, 0], [1, 0, 4, 5], 4, params);
-      }
-      if(!params.left) {
-        this.addFace(center, [1, 0, 0], [3, 2, 6, 7], 5, params);
-      }
-    });
-
     const geometry_ = new THREE.BufferGeometry();
     geometry_.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.vertices), 3))
-    if(this.useColor) {
-      geometry_.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.colors), 3));
-    }
+    // if(this.useColor) {
+    //   geometry_.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.colors), 3));
+    // }
     geometry_.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(this.normals), 3));
-    geometry_.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(this.uvs), 2));
+    if(this.useUvs) {
+      geometry_.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(this.uvs), 2));
+    }
     geometry_.setIndex(this.indices);
 
     return geometry_;
@@ -89,19 +92,21 @@ class EdgeGeoBuilder {
       this.vertices.push(center.x + (pt.x*this.size), center.y + (pt.y*this.size), center.z + (pt.z*this.size));
       this.normals.push(normal[0], normal[1], normal[2]);
 
-      if(!this.useColor) {
-        continue;
-      }
-      if(pt.y > 0) {
-        this.colors.push(this.grass.r, this.grass.g + this.getVariance(), this.grass.b);
-      }
-      else {
-        this.colors.push(this.dirt.r, this.dirt.g, this.dirt.b);
-      }
+      // if(!this.useColor) {
+      //   continue;
+      // }
+      // if(pt.y > 0) {
+      //   this.colors.push(this.grass.r, this.grass.g + this.getVariance(), this.grass.b);
+      // }
+      // else {
+      //   this.colors.push(this.dirt.r, this.dirt.g, this.dirt.b);
+      // }
     }
 
-    for(let u = 0; u < params.uvLookup[faceNum].length; u++) {
-      this.uvs.push(params.uvLookup[faceNum][u]);
+    if(this.useUvs) {
+      for(let u = 0; u < params.uvLookup[faceNum].length; u++) {
+        this.uvs.push(params.uvLookup[faceNum][u]);
+      }
     }
 
     const o = this.offset;
@@ -166,18 +171,23 @@ class EdgeGeoBuilder {
 }
 
 export class EdgeChunkGeometry {
-
   private meshGeometry_: THREE.BufferGeometry;
   private collisionGeometry_: THREE.BufferGeometry;
-  private map_ = new Map<number, EdgeIndexLookup>();
 
-  constructor(chunk: Chunk, scalar: number) {
-    this.meshGeometry_ = new EdgeGeoBuilder(chunk, scalar, this.map_).build();
+  constructor(chunk: Chunk, scalar: number, map: Map<number, EdgeIndexLookup>) {
+    const geoBuilder = new EdgeGeoBuilder(chunk, scalar, map);
+    const colBuilder = new EdgeGeoBuilder(chunk, scalar);
 
-    const builder = new EdgeGeoBuilder(chunk, scalar);
-    builder.useColor = false;
-    builder.size = 0.8;
-    this.collisionGeometry_ = builder.build();
+    colBuilder.useUvs = false;
+    colBuilder.size = 0.7999;
+
+    chunk.iterate((n, params) => {
+      geoBuilder.addBlock(params);
+      colBuilder.addBlock(params);
+    });
+
+    this.meshGeometry_ = geoBuilder.build();
+    this.collisionGeometry_ = colBuilder.build();
   }
 
   get collisionGeometry() {
@@ -186,9 +196,5 @@ export class EdgeChunkGeometry {
 
   get meshGeometry() {
     return this.meshGeometry_;
-  }
-
-  get map() {
-    return this.map_;
   }
 }

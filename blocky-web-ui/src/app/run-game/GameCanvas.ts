@@ -8,6 +8,7 @@ import * as LineMaterial from 'three/examples/jsm/lines/LineMaterial';
 import { PointAvg } from './PointAvg';
 import { ChunkManager } from './ChunkManager';
 import { EntityManager } from './EntityManager';
+import { CrosshairSprite } from './CrosshairSprite';
 
 export class PosInfo {
   constructor(
@@ -20,10 +21,12 @@ export class PosInfo {
 
 export class GameCanvas {
   private camera: THREE.PerspectiveCamera;
+  private cameraOrtho: THREE.OrthographicCamera;
   private geometry: THREE.BoxGeometry;
   // private material: THREE.MeshNormalMaterial;
   private mesh: THREE.Mesh;
   private scene: THREE.Scene;
+  private sceneOrtho: THREE.Scene;
   private renderer: THREE.WebGLRenderer;
 
   private prevTime!: number;
@@ -64,6 +67,12 @@ export class GameCanvas {
     this.mesh = new THREE.Mesh(this.geometry, new THREE.MeshNormalMaterial());
     this.scene.add(this.mesh);
 
+    const ww = window.innerWidth;
+    const hh = window.innerHeight;
+    this.cameraOrtho = new THREE.OrthographicCamera(-ww/2, ww/2, hh/2, -hh/2, 1, 10);
+    this.cameraOrtho.position.z = 10;
+    this.sceneOrtho = new THREE.Scene();
+    this.sceneOrtho.add(new CrosshairSprite());
     this.addTexturedObject();
 
     const gl = this.canvas.getContext('webgl2') as WebGL2RenderingContext;
@@ -73,6 +82,7 @@ export class GameCanvas {
       canvas: this.canvas,
       context: gl});
     this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
+    this.renderer.autoClear = false;
 
     requestAnimationFrame(this.requestFrame.bind(this));
 
@@ -323,7 +333,10 @@ export class GameCanvas {
 
     this.updateTraveller(delta / 1000);
 
+    this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
+    this.renderer.clearDepth();
+    this.renderer.render(this.sceneOrtho, this.cameraOrtho);
   }
 
   private baseHeight = 1.8;
@@ -339,7 +352,7 @@ export class GameCanvas {
       this.blockUntil = 0;
       return;
     }
-    const newPosition = this.entityManager.getPlayerPosition().clone();
+    const newPosition = this.entityManager.getPlayerPosition();
     const origy = newPosition.y;
 
     if(this.rotLeft) {
@@ -528,32 +541,32 @@ export class GameCanvas {
     if(event.code == 'KeyS') {
       this.goback = true;
     }
-    if(event.code == 'KeyA') {
+    if(event.code == 'KeyQ') {
       this.rotLeft = true;
     }
-    if(event.code == 'KeyD') {
+    if(event.code == 'KeyE') {
       this.rotRight = true;
     }
 
-    if(event.code == 'KeyQ') {
+    if(event.code == 'KeyA') {
       this.strafeLeft = true;
     }
-    if(event.code == 'KeyE') {
+    if(event.code == 'KeyD') {
       this.strafeRight = true;
     }
 
-    if(event.code == 'KeyZ') {
-      this.pitch -= Math.PI / 50;
-      if(this.pitch < (-Math.PI/2)) {
-        this.pitch = -Math.PI/2;
-      }
-    }
-    if(event.code == 'KeyC') {
-      this.pitch += Math.PI / 50;
-      if(this.pitch > (Math.PI/2)) {
-        this.pitch = Math.PI/2;
-      }
-    }
+    // if(event.code == 'KeyZ') {
+    //   this.pitch -= Math.PI / 50;
+    //   if(this.pitch < (-Math.PI/2)) {
+    //     this.pitch = -Math.PI/2;
+    //   }
+    // }
+    // if(event.code == 'KeyC') {
+    //   this.pitch += Math.PI / 50;
+    //   if(this.pitch > (Math.PI/2)) {
+    //     this.pitch = Math.PI/2;
+    //   }
+    // }
 
     if(event.code == 'Space' && !this.jumping) {
       this.jumping = true;
@@ -573,6 +586,22 @@ export class GameCanvas {
       this.travellerSpeed -= 0.1;
       if(this.travellerSpeed < 0) this.travellerSpeed = 0;
     }
+
+    if(event.code == 'KeyP') {
+      if(this.hasPointerLock()) {
+        document.exitPointerLock();
+      }
+      else {
+        const fn: any = this.canvas.requestPointerLock.bind(this.canvas);
+        fn({
+          unadjustedMovement: true
+        });
+      }
+    }
+  }
+
+  private hasPointerLock() {
+    return document.pointerLockElement == this.canvas;
   }
 
   private handleKeyUp(event: KeyboardEvent) {
@@ -582,16 +611,16 @@ export class GameCanvas {
     if(event.code == 'KeyS') {
       this.goback = false;
     }
-    if(event.code == 'KeyA') {
+    if(event.code == 'KeyQ') {
       this.rotLeft = false;
     }
-    if(event.code == 'KeyD') {
+    if(event.code == 'KeyE') {
       this.rotRight = false;
     }
-    if(event.code == 'KeyQ') {
+    if(event.code == 'KeyA') {
       this.strafeLeft = false;
     }
-    if(event.code == 'KeyE') {
+    if(event.code == 'KeyD') {
       this.strafeRight = false;
     }
   }
@@ -599,7 +628,32 @@ export class GameCanvas {
   private faceLine: THREE.Object3D | null = null;
 
   private handleMouseMove(event: MouseEvent) {
-    const isect = this.getIntersect(event);
+    const factor = 6.0;
+    if(this.hasPointerLock()) {
+      this.heading += (event.movementX/factor) * Math.PI/180.0;
+      if(this.heading < 0) {
+        this.heading += 2*Math.PI;
+      }
+      if(this.heading >= (2*Math.PI)) {
+        this.heading -= 2*Math.PI;
+      }
+
+      this.pitch -= (event.movementY/(factor*2)) * Math.PI/180.0;
+      if(this.pitch > (Math.PI/2)) {
+        this.pitch = Math.PI/2;
+      }
+      else if(this.pitch < (-Math.PI/2)) {
+        this.pitch = -Math.PI/2;
+      }
+    }
+
+    if(this.faceLine != null) {
+      this.scene.remove(this.faceLine);
+      this.faceLine = null;
+    }
+
+    // const isect = this.getIntersect(event);
+    const isect = this.getIntersectXY(0, 0);
 
     if(isect != null) {
       const lookup = this.chunkManager.lookup(isect);
@@ -635,7 +689,13 @@ export class GameCanvas {
     console.log('btn: ' + event.button + ', ' + event.altKey + ', ' + event.detail);
     event.stopPropagation();
 
-    const isect = this.getIntersect(event);
+    if(!this.hasPointerLock()) {
+      this.canvas.requestPointerLock();
+      return;
+    }
+
+    // const isect = this.getIntersect(event);
+    const isect = this.getIntersectXY(0, 0);
     if(isect == null) {
       return;
     }
@@ -646,7 +706,7 @@ export class GameCanvas {
       this.blockUntil = performance.now() + 250;
     }
     else if(event.button == 2) {
-      this.chunkManager.addBlock(isect);
+      this.chunkManager.addBlock(isect, this.entityManager);
       this.blockUntil = performance.now() + 250;
     }
     const duration = performance.now() - now;
@@ -656,12 +716,11 @@ export class GameCanvas {
   private getIntersect(event: MouseEvent) {
     const x = (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1;
     const y = -(event.clientY / this.renderer.domElement.clientHeight) * 2 + 1;
-    const ray = new THREE.Raycaster();
+    return this.getIntersectXY(x, y);
+  }
 
-    if(this.faceLine != null) {
-      this.scene.remove(this.faceLine);
-      this.faceLine = null;
-    }
+  private getIntersectXY(x: number, y: number) {
+    const ray = new THREE.Raycaster();
 
     ray.setFromCamera(new THREE.Vector2(x, y), this.camera);
     const isect = ray.intersectObjects(this.chunkManager.getSelectionMesh(this.entityManager.getPlayerPosition()), true);
@@ -674,8 +733,16 @@ export class GameCanvas {
   }
 
   private handleResize(event: UIEvent) {
-    this.camera.aspect = this.canvas.clientWidth / this.canvas.clientHeight;
+    const ww = this.canvas.clientWidth;
+    const hh = this.canvas.clientHeight;
+    this.camera.aspect = ww / hh;
     this.camera.updateProjectionMatrix();
+    this.cameraOrtho.left = -ww / 2;
+    this.cameraOrtho.right = ww / 2;
+    this.cameraOrtho.top = hh / 2;
+    this.cameraOrtho.bottom = -hh / 2;
+    this.cameraOrtho.updateProjectionMatrix();
+
     this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
   }
 }

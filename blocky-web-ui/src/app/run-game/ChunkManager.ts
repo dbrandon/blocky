@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Chunk } from './Chunk';
 import { EdgeChunkMesh } from './EdgeChunkMesh';
 import { sprintf } from 'sprintf-js';
+import { EntityManager } from './EntityManager';
 
 class ChunkInfo {
   constructor(public chunk: Chunk, public mesh: EdgeChunkMesh) {}
@@ -14,9 +15,6 @@ export class ChunkManager {
   private dirty_ = false;
 
   private map_ = new Map<string, ChunkInfo>();
-  private list_: Chunk[] = [];
-  // private chunkMap_ = new Map<string, Chunk>();
-  // private map = new Map<Chunk,EdgeChunkMesh>();
 
   constructor() {
     this.mesh_ = new THREE.Group();
@@ -27,9 +25,6 @@ export class ChunkManager {
         this.addChunk(new Chunk(xx, zz));
       }
     }
-
-    // this.addChunk(new Chunk(0, 0));
-    // this.addChunk(new Chunk(-1, 0));
   }
 
   private toKey(x: number, z: number) {
@@ -37,8 +32,7 @@ export class ChunkManager {
   }
 
   private addChunk(chunk: Chunk) {
-    this.list_.push(chunk);
-    // this.map_.set(this.toKey(chunk.x, chunk.z), new ChunkInfo(chunk));
+    this.map_.set(this.toKey(chunk.x, chunk.z), new ChunkInfo(chunk, new EdgeChunkMesh(chunk)));
     this.dirty_ = true;
   }
 
@@ -47,7 +41,7 @@ export class ChunkManager {
     const cz = Math.floor(pos.z) >> 3;
 
     for(let info of this.map_.values()) {
-      const visible = (info.chunk.x >= cx-2 && info.chunk.x <= cx+2) && (info.chunk.z >= cz-2 && info.chunk.z <= cz+2);
+      const visible = (info.chunk.x >= cx-5 && info.chunk.x <= cx+5) && (info.chunk.z >= cz-5 && info.chunk.z <= cz+5);
       info.mesh.getMesh().visible = visible
     }
   }
@@ -58,12 +52,6 @@ export class ChunkManager {
 
   getEdgeMesh(x: number, z: number) {
     return this.getChunk(x, z)?.mesh;
-    // const chunk = this.getChunk(x, z);
-
-    // if(chunk) {
-    //   return this.map.get(chunk);
-    // }
-    // return undefined;
   }
 
   /**
@@ -71,7 +59,6 @@ export class ChunkManager {
    * @param pos 
    */
   getSelectionMesh(pos: THREE.Vector3) {
-    // return [ this.mesh_ ];
     const xmin = Math.floor((pos.x-5) / 8);
     const xmax = Math.floor((pos.x+5) / 8);
     const zmin = Math.floor((pos.z-5) / 8);
@@ -84,14 +71,9 @@ export class ChunkManager {
 
         if(info) {
           list.push(info.mesh.getMesh());
-          // const m = this.map.get(chunk)?.getMesh();
-          // if(m) {
-          //   list.push(m);
-          // }
         }
       }
     }
-    console.log('nchunk=' + list.length);
 
     return list;
   }
@@ -101,7 +83,7 @@ export class ChunkManager {
       if(info == null) {
         continue;
       }
-      if(intersect.object == info.mesh.getMesh()) {
+      if(info.mesh.containsObject(intersect.object)) {
         return info;
       }
     }
@@ -126,17 +108,11 @@ export class ChunkManager {
 
   lookup(intersect: THREE.Intersection) {
     const info = this.lookupChunkInfo(intersect);
-    // const [chunk, mesh] = this.getMesh(intersect);
-    // if(mesh == null) {
-    //   return;
-    // }
-
     return info?.mesh.lookupFromIndex(intersect.faceIndex);
   }
 
-  addBlock(intersect: THREE.Intersection) {
+  addBlock(intersect: THREE.Intersection, entityManager: EntityManager) {
     let info = this.lookupChunkInfo(intersect);
-    // let [chunk, mesh] = this.getMesh(intersect);
     const lookup = info?.mesh.lookupFromIndex(intersect.faceIndex);
     let loc : THREE.Vector3 | null;
 
@@ -151,6 +127,12 @@ export class ChunkManager {
       return;
     }
 
+    const bounds = this.getBoundingBox(loc, info.chunk);
+    if(entityManager.getEntityIntersect(bounds).length > 0) {
+      console.log('New block overlaps with entity');
+      return;
+    }
+
     if(!info.chunk.add(loc, this)) {
       console.log('chunk already has block at location');
       return;
@@ -158,6 +140,17 @@ export class ChunkManager {
 
     const rebuilds = this.getAffectedNeighbors(info.mesh, loc.x, loc.z);
     this.rebuildMeshes(rebuilds);
+  }
+
+  private getBoundingBox(location: THREE.Vector3, chunk: Chunk) {
+    const min = location.clone();
+    min.x += chunk.x * Chunk.X;
+    min.z += chunk.z * Chunk.Z;
+
+    const offset = 1;
+    const max = min.clone().add(new THREE.Vector3(1, 1, 1));
+
+    return new THREE.Box3(min, max);
   }
 
   getAffectedNeighbors(mesh: EdgeChunkMesh, x: number, z: number) {
@@ -195,30 +188,22 @@ export class ChunkManager {
   private adjustChunk(chunkInfo: ChunkInfo, location: THREE.Vector3): [null|THREE.Vector3, null|ChunkInfo] {
     const loc = location.clone();
     let [cx, cz] = [chunkInfo.chunk.x, chunkInfo.chunk.z];
-    // let ch = chunkInfo;
 
     if(loc.x < 0) {
       cx--;
-      // ch = this.getChunk(ch.x-1, ch.z);
       loc.x += Chunk.X;
     }
     else if(loc.x >= Chunk.X) {
       cx++;
-      // ch = this.chunkMap_.get('' + (ch.x + 1) + ':' + ch.z);
       loc.x -= Chunk.X;
     }
-    // if(ch == undefined) {
-    //   return [null, null, null];
-    // }
 
     if(loc.z < 0) {
       cz--;
-      // ch = this.chunkMap_.get('' + ch.x + ':' + (ch.z-1));
       loc.z += Chunk.Z;
     }
     else if(loc.z >= Chunk.Z) {
       cz++;
-      // ch = this.chunkMap_.get('' + ch.x + ':' + (ch.z + 1));
       loc.z -= Chunk.Z;
     }
 
@@ -226,10 +211,6 @@ export class ChunkManager {
     if(ch == undefined) {
       return [null, null];
     }
-    // const mesh = this.map.get(ch);
-    // if(mesh == undefined) {
-    //   return [null, null, null];
-    // }
 
     return [loc, ch];
   }
@@ -268,28 +249,37 @@ export class ChunkManager {
   private rebuildMeshes(list: EdgeChunkMesh[]) {
     for(let mesh of list) {
       mesh.chunk.buildNeighbors(this);
-      this.mesh_.remove(mesh.getMesh());
-      this.collisionMesh_.remove(mesh.getCollisionMesh());
-      const m = new EdgeChunkMesh(mesh.chunk);
-      this.map_.set(this.toKey(mesh.chunk.x, mesh.chunk.z), new ChunkInfo(mesh.chunk, m));
-      // this.map.set(mesh.chunk, m);
-      this.mesh_.add(m.getMesh());
-      this.collisionMesh_.add(m.getCollisionMesh());
     }
+    for(let mesh of list) {
+      mesh.rebuild();
+    }
+    // for(let mesh of list) {
+    //   mesh.chunk.buildNeighbors(this);
+    //   this.mesh_.remove(mesh.getMesh());
+    //   this.collisionMesh_.remove(mesh.getCollisionMesh());
+    //   const m = new EdgeChunkMesh(mesh.chunk);
+    //   this.map_.set(this.toKey(mesh.chunk.x, mesh.chunk.z), new ChunkInfo(mesh.chunk, m));
+    //   this.mesh_.add(m.getMesh());
+    //   this.collisionMesh_.add(m.getCollisionMesh());
+    // }
   }
 
   private rebuild() {
     this.mesh_.clear();
     this.collisionMesh_.clear();
 
-    this.map_.clear();
+    // this.map_.clear();
 
-    for(let chunk of this.list_) {
-      chunk.buildNeighbors(this);
-      const m = new EdgeChunkMesh(chunk);
-      this.mesh_.add(m.getMesh());
-      this.map_.set(this.toKey(chunk.x, chunk.z), new ChunkInfo(chunk, m));
-      this.collisionMesh_.add(m.getCollisionMesh());
+    for(let info of this.map_.values()) {
+      info.chunk.buildNeighbors(this);
+    }
+
+    for(let info of this.map_.values()) {
+      info.mesh.rebuild();
+      // const m = new EdgeChunkMesh(chunk);
+      this.mesh_.add(info.mesh.getMesh());
+      // this.map_.set(this.toKey(info.chunk.x, chunk.z), new ChunkInfo(chunk, m));
+      this.collisionMesh_.add(info.mesh.getCollisionMesh());
     }
     this.dirty_ = false;
   }

@@ -2,15 +2,21 @@
 import * as THREE from 'three';
 import { ChunkMesh } from './ChunkMesh';
 import { Chunk } from './Chunk';
-import { EdgeChunkGeometry } from './EdgeChunkGeometry';
+import { EdgeChunkGeometry, EdgeIndexLookup } from './EdgeChunkGeometry';
 
 export class EdgeChunkMesh extends ChunkMesh {
-  private geometry_ : EdgeChunkGeometry;
-  private mesh_ : THREE.Object3D;
+  // private geometry_ : EdgeChunkGeometry;
+  private mesh_ = new THREE.Group();
+  private map_ = new Map<number, EdgeIndexLookup>();
 
-  private collisionMesh_ : THREE.Object3D;
+  private collisionMesh_ = new THREE.Group();
   private static texture = new THREE.TextureLoader().load('/assets/kennynl/voxel_pack/spritesheet_tiles.png');
   private static firstLoad = true;
+
+  private static COLLISION_MAT = new THREE.MeshBasicMaterial({
+    color: 0xFFFFFF,
+    wireframe: true
+  });
 
   constructor(chunk: Chunk, private scalar = 1) {
     super(chunk);
@@ -23,30 +29,42 @@ export class EdgeChunkMesh extends ChunkMesh {
       EdgeChunkMesh.texture.wrapS = THREE.RepeatWrapping;
       EdgeChunkMesh.texture.wrapT = THREE.RepeatWrapping;
     }
+  }
 
-    this.geometry_ = new EdgeChunkGeometry(chunk, scalar);
+  containsObject(object: THREE.Object3D) {
+    for(let i = 0; i < this.mesh_.children.length; i++) {
+      if(this.mesh_.children[i] == object) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  rebuild() {
+    this.map_.clear();
+    const geometry = new EdgeChunkGeometry(this.chunk, this.scalar, this.map_);
     // const mat = new THREE.MeshLambertMaterial({
     //   vertexColors: true,
     //   side: scalar > 1 ? THREE.DoubleSide : THREE.FrontSide
     // });
-    const mat = new THREE.MeshPhongMaterial({
+    const mat = new THREE.MeshLambertMaterial({
       map: EdgeChunkMesh.texture,
+      side: this.scalar > 1 ? THREE.DoubleSide : THREE.FrontSide
     })
-    this.mesh_ = new THREE.Mesh(this.geometry_.meshGeometry, mat);
-    this.mesh_.position.x = (this.chunk.x << 3) * scalar;
-    this.mesh_.position.z = (this.chunk.z << 3) * scalar;
-    this.mesh_.castShadow = true;
-    this.mesh_.receiveShadow = true;
 
-    this.collisionMesh_ = new THREE.Mesh(
-      this.geometry_.collisionGeometry,
-      new THREE.MeshBasicMaterial({
-        color: 0xFF0000,
-        wireframe: true
-      })
-    );
-    this.collisionMesh_.position.x = (this.chunk.x << 3) * scalar;
-    this.collisionMesh_.position.z = (this.chunk.z << 3) * scalar;
+    this.mesh_.clear();
+    const mesh = new THREE.Mesh(geometry.meshGeometry, mat);
+    mesh.position.x = (this.chunk.x << 3) * this.scalar;
+    mesh.position.z = (this.chunk.z << 3) * this.scalar;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.mesh_.add(mesh);
+
+    this.collisionMesh_.clear();
+    const cmesh = new THREE.Mesh(geometry.collisionGeometry, EdgeChunkMesh.COLLISION_MAT);
+    cmesh.position.x = (this.chunk.x << 3) * this.scalar;
+    cmesh.position.z = (this.chunk.z << 3) * this.scalar;
+    this.collisionMesh_.add(cmesh);
   }
 
   getVariance() {
@@ -62,16 +80,12 @@ export class EdgeChunkMesh extends ChunkMesh {
   }
 
   lookupFromIndex(index: number | undefined) {
-    const lookup = index == null ? null : this.geometry_.map.get(index);
+    const lookup = index == null ? null : this.map_.get(index);
 
     if(lookup == null) {
       return;
     }
 
     return lookup;
-  }
-
-  addBlock(index: number | undefined) {
-    return index == null ? null : this.geometry_.map.get(index);
   }
 }

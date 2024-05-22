@@ -13,6 +13,17 @@ export class EntityManager {
     console.log('added player wireframe');
   }
 
+  getEntityIntersect(aabb: THREE.Box3) {
+    const test = this.player_.getAABB();
+    const list: GameEntity[] = [];
+
+    if(aabb.intersectsBox(test)) {
+      list.push(this.player_);
+    }
+
+    return list;
+  }
+
   getPlayerPosition() {
     return this.player_.position;
   }

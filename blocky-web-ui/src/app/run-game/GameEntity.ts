@@ -53,9 +53,17 @@ export class GameEntity {
   //
   // https://stackoverflow.com/questions/9600801/evenly-distributing-n-points-on-a-sphere/44164075#44164075
   constructor() {
-    this.size_ = new THREE.Vector3(.6, .6, .6);
+    this.size_ = new THREE.Vector3(.6, 1.4, .6);
     this.wireframeMesh_ = this.createWireframeMesh();
-    this.position = new THREE.Vector3(1, 3, 1);
+    this.position = new THREE.Vector3(0, 4, 0);
+  }
+
+  getAABB() {
+    const sz = this.size_.clone().multiplyScalar(0.5);
+    const min = this.position_.clone().sub(sz);
+    const max = this.position_.clone().add(sz);
+
+    return new THREE.Box3(min, max);
   }
 
   private createWireframeMesh() {
@@ -77,13 +85,11 @@ export class GameEntity {
   }
 
   adjustPositionUpdate(next: THREE.Vector3, mesh: THREE.Object3D[]) {
-    // let target = next.clone();
-    // let pos = this.position_.clone();
     let ray = new THREE.Raycaster();
     let sentDist = false;
-
+    
     let samplePts = [
-      new SamplePoint(0, this.position_, next),
+      new SamplePoint(0, this.position, next),
       // new SamplePoint(1.3, this.position_, next)
     ];
 
@@ -135,8 +141,7 @@ export class GameEntity {
     }
 
     this.position = samplePts[0].target;
-
-    return this.position_.clone();
+    return samplePts[0].target.clone();
   }
 
   getDistanceTo(mesh: THREE.Object3D) {
@@ -170,17 +175,17 @@ export class GameEntity {
 
   get cameraPosition() {
     const pos = this.position_.clone();
-    pos.y += 1.5;
+    pos.y += 1;
     return pos;
   }
 
   get position() {
-    return this.position_.clone();
+    return this.position_.clone().sub(new THREE.Vector3(0, .5, 0));
   }
 
   set position(position: THREE.Vector3) {
-    this.position_ = position.clone();
-    this.wireframeMesh_.position.set(position.x, position.y, position.z);
+    this.position_ = position.clone().add(new THREE.Vector3(0, .5, 0));
+    this.wireframeMesh_.position.copy(this.position_);
   }
 
   get wireframe() {
