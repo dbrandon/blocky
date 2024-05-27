@@ -4,6 +4,7 @@ import { Chunk } from './Chunk';
 import { EdgeChunkMesh } from './EdgeChunkMesh';
 import { sprintf } from 'sprintf-js';
 import { EntityManager } from './EntityManager';
+import { BlockSelection } from './BlockSelection';
 
 class ChunkInfo {
   constructor(public chunk: Chunk, public mesh: EdgeChunkMesh) {}
@@ -108,12 +109,12 @@ export class ChunkManager {
 
   lookup(intersect: THREE.Intersection) {
     const info = this.lookupChunkInfo(intersect);
-    return info?.mesh.lookupFromIndex(intersect.faceIndex);
+    return info?.mesh.lookupFromIntersect(intersect);
   }
 
-  addBlock(intersect: THREE.Intersection, entityManager: EntityManager) {
+  addBlock(intersect: THREE.Intersection, selection: BlockSelection, entityManager: EntityManager) {
     let info = this.lookupChunkInfo(intersect);
-    const lookup = info?.mesh.lookupFromIndex(intersect.faceIndex);
+    const lookup = info?.mesh.lookupFromIntersect(intersect);
     let loc : THREE.Vector3 | null;
 
     if(info?.chunk == null || info?.mesh == null || lookup == undefined) {
@@ -133,7 +134,7 @@ export class ChunkManager {
       return;
     }
 
-    if(!info.chunk.add(loc, this)) {
+    if(!info.chunk.add(loc, selection, this)) {
       console.log('chunk already has block at location');
       return;
     }
@@ -218,10 +219,11 @@ export class ChunkManager {
   removeBlock(intersect: THREE.Intersection) {
     const info = this.lookupChunkInfo(intersect);
     if(info == null) {
+      console.log('no chunk at intersect');
       return;
     }
 
-    const lookup = info.mesh.lookupFromIndex(intersect.faceIndex);
+    const lookup = info.mesh.lookupFromIntersect(intersect);
     if(lookup == null) {
       return false;
     }

@@ -2,12 +2,24 @@
 import * as THREE from 'three';
 import { ChunkMesh } from './ChunkMesh';
 import { Chunk } from './Chunk';
-import { EdgeChunkGeometry, EdgeIndexLookup } from './EdgeChunkGeometry';
+import { EdgeChunkGeometry } from './EdgeChunkGeometry';
+import { ChunkMeshLookup } from './ChunkMeshLookup';
+
+class EdgeMesh extends THREE.Mesh {
+  lookupMap: Map<number, ChunkMeshLookup>;
+
+  constructor(geo: THREE.BufferGeometry, mat: THREE.Material, map?: Map<number, ChunkMeshLookup>) {
+    super(geo, mat);
+    this.lookupMap = map ? map : new Map<number, ChunkMeshLookup>();
+  }
+}
+
+interface ChunkMeshGroup extends THREE.Group {
+  children: EdgeMesh[];
+}
 
 export class EdgeChunkMesh extends ChunkMesh {
-  // private geometry_ : EdgeChunkGeometry;
-  private mesh_ = new THREE.Group();
-  private map_ = new Map<number, EdgeIndexLookup>();
+  private mesh_ = new THREE.Group() as ChunkMeshGroup;
 
   private collisionMesh_ = new THREE.Group();
   private static texture = new THREE.TextureLoader().load('/assets/kennynl/voxel_pack/spritesheet_tiles.png');
@@ -32,7 +44,6 @@ export class EdgeChunkMesh extends ChunkMesh {
   }
 
   containsObject(object: THREE.Object3D) {
-    console.log('test: length=' + this.mesh_.children.length);
     for(let i = 0; i < this.mesh_.children.length; i++) {
       if(this.mesh_.children[i] == object) {
         return true;
@@ -42,8 +53,7 @@ export class EdgeChunkMesh extends ChunkMesh {
   }
 
   rebuild() {
-    this.map_.clear();
-    const geometry = new EdgeChunkGeometry(this.chunk, this.scalar, this.map_);
+    const geometry = new EdgeChunkGeometry(this.chunk, this.scalar);
     // const mat = new THREE.MeshLambertMaterial({
     //   vertexColors: true,
     //   side: scalar > 1 ? THREE.DoubleSide : THREE.FrontSide
@@ -54,10 +64,11 @@ export class EdgeChunkMesh extends ChunkMesh {
     })
 
     this.mesh_.clear();
-    for(let geo of geometry.meshMap.values()) {
-      const mesh = new THREE.Mesh(geo, mat);
+    for(let info of geometry.meshMap.values()) {
+      const mesh = new EdgeMesh(info.geo, mat, info.map);
       mesh.position.x = (this.chunk.x << 3) * this.scalar;
       mesh.position.z = (this.chunk.z << 3) * this.scalar;
+      mesh.lookupMap = info.map;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       this.mesh_.add(mesh);
@@ -69,6 +80,20 @@ export class EdgeChunkMesh extends ChunkMesh {
       cmesh.position.x = (this.chunk.x << 3) * this.scalar;
       cmesh.position.z = (this.chunk.z << 3) * this.scalar;
       this.collisionMesh_.add(cmesh);
+    }
+
+    for(let door of geometry.doorList) {
+      // const hinge = new THREE.Vector3(door.params.x, door.params.y, door.params.z);
+      const mesh = new EdgeMesh(door.geo, mat);
+      mesh.position.x = ((this.chunk.x << 3) + door.params.x) * this.scalar;
+      mesh.position.z = ((this.chunk.z << 3) + door.params.z) * this.scalar;
+      mesh.position.y = door.params.y * this.scalar;
+
+      this.mesh_.add(mesh);
+
+      const cm = new THREE.Mesh(door.geo, mat);
+      cm.position.copy(mesh.position);
+      this.collisionMesh_.add(cm);
     }
   }
 
@@ -84,13 +109,24 @@ export class EdgeChunkMesh extends ChunkMesh {
     return this.mesh_;
   }
 
-  lookupFromIndex(index: number | undefined) {
-    const lookup = index == null ? null : this.map_.get(index);
-
-    if(lookup == null) {
+  lookupFromIntersect(intersect: THREE.Intersection | undefined) {
+    if(!intersect || intersect.faceIndex == undefined) {
       return;
     }
 
-    return lookup;
+    for(let child of this.mesh_.children) {
+      if(child == intersect.object) {
+        return child.lookupMap.get(intersect.faceIndex);
+      }
+    }
+
+    return;
+    // const lookup = index == null ? null : this.map_.get(index);
+
+    // if(lookup == null) {
+    //   return;
+    // }
+
+    // return lookup;
   }
 }

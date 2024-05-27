@@ -90,7 +90,7 @@ export class GameEntity {
     
     let samplePts = [
       new SamplePoint(0, this.position, next),
-      // new SamplePoint(1.3, this.position_, next)
+      new SamplePoint(1.3, this.position, next)
     ];
 
     for(;;) {

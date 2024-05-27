@@ -1,9 +1,11 @@
 
 import * as THREE from 'three';
 import { GameEntity } from './GameEntity';
+import { DoorEntity } from './DoorEntity';
 
 export class EntityManager {
   private player_: GameEntity;
+  private door_: DoorEntity;
 
   constructor(
     private scene_ : THREE.Scene
@@ -11,6 +13,9 @@ export class EntityManager {
     this.player_ = new GameEntity();
     this.scene_.add(this.getPlayerWireframe());
     console.log('added player wireframe');
+
+    this.door_ = new DoorEntity(5, 0, 5);
+    this.scene_.add(this.door_.mesh);
   }
 
   getEntityIntersect(aabb: THREE.Box3) {
@@ -51,5 +56,9 @@ export class EntityManager {
 
   getDistanceTo(mesh: THREE.Object3D) {
     return this.player_.getDistanceTo(mesh);
+  }
+
+  toggleDoor() {
+    this.door_.toggle();
   }
 }

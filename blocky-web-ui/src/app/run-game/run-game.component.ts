@@ -1,7 +1,8 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
 import { GameCanvas } from './GameCanvas';
 import { DebugOverlayComponent } from '../debug-overlay/debug-overlay.component';
-import { Subscription, fromEvent, interval, sampleTime } from 'rxjs';
+import { Subscription, fromEvent, interval, sampleTime, timeout, timer } from 'rxjs';
+import { GameUiOverlayComponent } from '../game-ui-overlay/game-ui-overlay.component';
 
 @Component({
   selector: 'app-run-game',
@@ -11,6 +12,7 @@ import { Subscription, fromEvent, interval, sampleTime } from 'rxjs';
 export class RunGameComponent {
   @ViewChild('gameCanvas') gameCanvas!: ElementRef;
   @ViewChild('debugOverlay') debugOverlay!: DebugOverlayComponent;
+  @ViewChild('uiOverlay') uiOverlay!: GameUiOverlayComponent;
   private canvas!: GameCanvas;
 
   private timer$!: Subscription;
@@ -37,6 +39,9 @@ export class RunGameComponent {
     this.canvas.distObserver.pipe(
       sampleTime(100)
     ).subscribe(dist => this.debugOverlay.setDistToTarget(dist));
+
+    this.canvas.blockSelectionObserver.subscribe(info => this.uiOverlay.setBlockSelectionUrl(info));
+    timer(100).subscribe(() => this.uiOverlay.setBlockSelectionUrl(this.canvas.placementImgUrl));
   }
 
   private handleTimer() {

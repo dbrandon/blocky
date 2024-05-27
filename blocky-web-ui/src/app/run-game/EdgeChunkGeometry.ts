@@ -1,16 +1,7 @@
 import { Chunk, ChunkBlock } from "./Chunk";
 import * as THREE from 'three';
-
-export class EdgeIndexLookup {
-  constructor(
-      public location: THREE.Vector3,
-      public addLocation: THREE.Vector3,
-      public facePoints: THREE.Vector3[],
-      public sidePoints: THREE.Vector3[]
-  ) {
-
-  }
-}
+import { DoorGeometry } from "./DoorEntity";
+import { ChunkMeshLookup } from "./ChunkMeshLookup";
 
 class EdgeGeoBuilder {
   indices: number[] = [];
@@ -38,29 +29,33 @@ class EdgeGeoBuilder {
     new THREE.Vector3(1, -1, -1)
   ];
 
-  constructor(private chunk: Chunk, private scalar: number, private map_?: Map<number, EdgeIndexLookup>) {
+  constructor(private chunk: Chunk, private scalar: number, private map_?: Map<number, ChunkMeshLookup>) {
 
+  }
+
+  get map() {
+    return this.map_;
   }
 
   addBlock(params: ChunkBlock) {
     const center = new THREE.Vector3((params.x * this.scalar)+.5, (params.y * this.scalar) + .5, (params.z * this.scalar) + .5);
 
-    if(!params.above) {
+    if(!params.above || params.above.type != ChunkBlock.TYPE_NORMAL) {
       this.addFace(center, [0, 1, 0], [1, 2, 3, 0], 0, params);
     }
-    if(!params.below) {
+    if(!params.below || params.below.type != ChunkBlock.TYPE_NORMAL) {
       this.addFace(center, [0, -1, 0], [4, 7, 6, 5], 1, params);
     }
-    if(!params.front) {
+    if(!params.front || params.front.type != ChunkBlock.TYPE_NORMAL) {
       this.addFace(center, [0, 0, -1], [0, 3, 7, 4], 2, params);
     }
-    if(!params.back) {
+    if(!params.back || params.back.type != ChunkBlock.TYPE_NORMAL) {
       this.addFace(center, [0, 0, 1], [2, 1, 5, 6], 3, params);
     }
-    if(!params.right) {
+    if(!params.right || params.right.type != ChunkBlock.TYPE_NORMAL) {
       this.addFace(center, [-1, 0, 0], [1, 0, 4, 5], 4, params);
     }
-    if(!params.left) {
+    if(!params.left || params.left.type != ChunkBlock.TYPE_NORMAL) {
       this.addFace(center, [1, 0, 0], [3, 2, 6, 7], 5, params);
     }
   }
@@ -140,14 +135,12 @@ class EdgeGeoBuilder {
       this.map_.set(index, {
         location: location,
         addLocation: addLocation,
-        facePoints: this.makeFacePoints(v, true),
-        sidePoints: side,
+        selectionPoints: side,
       });
       this.map_.set(index+1, {
         location: location,
         addLocation: addLocation,
-        facePoints: this.makeFacePoints(v, false),
-        sidePoints: side
+        selectionPoints: side
       })
     }
   }
@@ -173,20 +166,27 @@ class EdgeGeoBuilder {
 export class EdgeChunkGeometry {
   static Y = 8;
 
-  private meshMap_ = new Map<number, THREE.BufferGeometry>();
+  private meshMap_ = new Map<number, {geo: THREE.BufferGeometry, map: Map<number, ChunkMeshLookup>}>();
   private collisionMap_ = new Map<number, THREE.BufferGeometry>();
 
-  constructor(chunk: Chunk, scalar: number, map: Map<number, EdgeIndexLookup>) {
+  private doorList_: {geo: THREE.BufferGeometry, params: ChunkBlock}[] = [];
+
+  constructor(chunk: Chunk, scalar: number) {
     const visMap = new Map<number, EdgeGeoBuilder>();
     const colMap = new Map<number, EdgeGeoBuilder>();
 
     chunk.iterate((n, params) => {
+      if(params.type != ChunkBlock.TYPE_NORMAL) {
+        const geo = new DoorGeometry(params.uvLookup).build();
+        this.doorList_.push({geo: geo, params: params});
+        return;
+      }
       const y = Math.floor(params.y / EdgeChunkGeometry.Y);
       let col = colMap.get(y);
       let vis = visMap.get(y);
 
       if(!vis) {
-        vis = new EdgeGeoBuilder(chunk, scalar, map);
+        vis = new EdgeGeoBuilder(chunk, scalar, new Map<number, ChunkMeshLookup>());
         visMap.set(y, vis);
       }
       if(!col) {
@@ -201,7 +201,7 @@ export class EdgeChunkGeometry {
     });
 
     visMap.forEach((val, key) => {
-      this.meshMap_.set(key, val.build());
+      this.meshMap_.set(key, {geo: val.build(), map: val.map as Map<number,ChunkMeshLookup>});
     })
     colMap.forEach((val, key) => {
       this.collisionMap_.set(key, val.build());
@@ -210,6 +210,10 @@ export class EdgeChunkGeometry {
 
   get collisioNMap() {
     return this.collisionMap_;
+  }
+
+  get doorList() {
+    return this.doorList_;
   }
 
   get meshMap() {

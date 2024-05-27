@@ -9,6 +9,7 @@ import { PointAvg } from './PointAvg';
 import { ChunkManager } from './ChunkManager';
 import { EntityManager } from './EntityManager';
 import { CrosshairSprite } from './CrosshairSprite';
+import { BlockSelection } from './BlockSelection';
 
 export class PosInfo {
   constructor(
@@ -56,6 +57,10 @@ export class GameCanvas {
   private chunkManager = new ChunkManager();
   private entityManager;
 
+  blockSelectionObserver: Subject<string>;
+  private blockSelectionList = BlockSelection.makeSelectionList();
+  private blockSelection = 0;
+
   constructor(private canvas: HTMLCanvasElement) {
     this.camera = new THREE.PerspectiveCamera(45, this.canvas.clientWidth / this.canvas.clientHeight, 0.01, 100);
 
@@ -97,6 +102,7 @@ export class GameCanvas {
     document.addEventListener('mousemove', this.handleMouseMove.bind(this));
     document.addEventListener('keydown', this.handleKeyDown.bind(this));
     document.addEventListener('keyup', this.handleKeyUp.bind(this));
+    document.addEventListener('wheel', this.handleMouseWheel.bind(this));
 
     document.body.oncontextmenu = () => {
       return false;
@@ -148,6 +154,12 @@ export class GameCanvas {
 
     this.addCatmullRomCurve();
     this.updatePosition(0);
+
+    this.blockSelectionObserver = new Subject<string>();
+  }
+
+  get placementImgUrl() {
+    return this.blockSelectionList[this.blockSelection].imgUrl;
   }
 
   private addTexturedObject() {
@@ -578,6 +590,10 @@ export class GameCanvas {
       this.followTraveller = !this.followTraveller;
     }
 
+    if(event.code == 'KeyM') {
+      this.entityManager.toggleDoor();
+    }
+
     if(event.code == 'NumpadAdd') {
       this.travellerSpeed += 0.1;
       if(this.travellerSpeed > 10) this.travellerSpeed = 10;
@@ -657,7 +673,7 @@ export class GameCanvas {
 
     if(isect != null) {
       const lookup = this.chunkManager.lookup(isect);
-      const pts = this.chunkManager.lookup(isect)?.sidePoints;
+      const pts = this.chunkManager.lookup(isect)?.selectionPoints;
 
       if(pts != null) {
         let rawpts: number[] = [];
@@ -706,11 +722,23 @@ export class GameCanvas {
       this.blockUntil = performance.now() + 250;
     }
     else if(event.button == 2) {
-      this.chunkManager.addBlock(isect, this.entityManager);
+      this.chunkManager.addBlock(isect, this.blockSelectionList[this.blockSelection], this.entityManager);
       this.blockUntil = performance.now() + 250;
     }
     const duration = performance.now() - now;
     console.log('click time: ' + duration);
+  }
+
+  private handleMouseWheel(event: WheelEvent) {
+    this.blockSelection += (event.deltaY < 0) ? -1 : 1;
+    if(this.blockSelection < 0) {
+      this.blockSelection = this.blockSelectionList.length-1;
+    }
+    if(this.blockSelection >= this.blockSelectionList.length) {
+      this.blockSelection = 0;
+    }
+
+    this.blockSelectionObserver.next(this.blockSelectionList[this.blockSelection].imgUrl);
   }
 
   private getIntersect(event: MouseEvent) {

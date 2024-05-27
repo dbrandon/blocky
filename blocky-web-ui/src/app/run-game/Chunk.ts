@@ -3,19 +3,32 @@ import random from 'random';
 import { sprintf } from 'sprintf-js';
 import * as THREE from 'three';
 import { ChunkManager } from './ChunkManager';
+import { BlockSelection } from './BlockSelection';
 
-export interface ChunkBlock {
-  color: number;
-  x: number;
-  y: number;
-  z: number;
-  uvLookup: number[][];
+export class ChunkBlock {
+  static TYPE_NORMAL = 1;
+  static TYPE_DOOR = 20;
+
+  constructor(
+    public color: number,
+    public x: number,
+    public y: number,
+    public z: number,
+    public uvLookup: number[][],
+    public type = ChunkBlock.TYPE_DOOR
+  ) {
+
+  }
   above: ChunkBlock | undefined;
   below: ChunkBlock | undefined;
   left: ChunkBlock | undefined;
   right: ChunkBlock | undefined;
   front: ChunkBlock | undefined;
   back: ChunkBlock | undefined;
+}
+
+export class OrientedChunkBlock extends ChunkBlock {
+  orientation = new THREE.Vector3();
 }
 
 class ParamMap extends Map<string, ChunkBlock> {
@@ -59,6 +72,7 @@ export class Chunk {
   private uvDirtBlock: number[][];
   private uvStoneBlock: number[][];
   private uvCoalBlock: number[][];
+  private uvWoodDoor: number[][];
 
   private static toKey(x: number, y: number, z:number) {
     return '' + x + ':' + y + ':' + z;
@@ -70,6 +84,7 @@ export class Chunk {
     const stoneUv = this.makeUvs(3, 5);
     const coal1 = this.makeUvs(3, 8);
     const coal2 = this.makeUvs(3, 9);
+    const woodUv = this.makeUvs(1, 9);
 
     this.uvGrassBlock = [
       this.makeUvs(6, 8),
@@ -80,6 +95,7 @@ export class Chunk {
     this.uvDirtBlock = [ dirtUv, dirtUv, dirtUv, dirtUv, dirtUv, dirtUv ];
     this.uvStoneBlock = [ stoneUv, stoneUv, stoneUv, stoneUv, stoneUv, stoneUv ];
     this.uvCoalBlock = [ coal1, coal2, coal1, coal2, coal1, coal2 ];
+    this.uvWoodDoor = [ woodUv, woodUv, woodUv, woodUv, woodUv, woodUv ];
 
     for(let x = 0; x < Chunk.X; x++) {
       for(let y = Chunk.YMIN; y < Chunk.YMAX; y++) {
@@ -89,7 +105,7 @@ export class Chunk {
           if(add) {
             let uv = this.uvGrassBlock;
             if(y < -3) {
-              uv = (r > .8) ? this.uvCoalBlock : this.uvStoneBlock;
+              uv = (r > .9) ? this.uvCoalBlock : this.uvStoneBlock;
             }
             else if(y < -1) {
               uv = this.uvDirtBlock
@@ -117,6 +133,7 @@ export class Chunk {
       x: x,
       y: y,
       z: z,
+      type: ChunkBlock.TYPE_NORMAL,
       above: undefined,
       below: undefined,
       back: undefined,
@@ -182,13 +199,37 @@ export class Chunk {
     }
   }
 
-  add(location: THREE.Vector3, manager: ChunkManager) {
+  add(location: THREE.Vector3, selection: BlockSelection, manager: ChunkManager) {
     if(this.paramMap_.lookupVector(location) != null) {
       return false;
     }
 
-    const uv = location.y < 0 ? this.uvDirtBlock : this.uvGrassBlock;
-    this.paramMap_.add(this.makeBlock(location.x, location.y, location.z, 0xFF00FF, uv));
+    let uv = this.uvDirtBlock;
+    let type = ChunkBlock.TYPE_NORMAL;
+    if(selection.blockType == BlockSelection.TYPE_COAL) {
+      uv = this.uvCoalBlock;
+    }
+    else if(selection.blockType == BlockSelection.TYPE_DIRT) {
+      uv = this.uvDirtBlock;
+    }
+    else if(selection.blockType == BlockSelection.TYPE_GRASS) {
+      uv = this.uvGrassBlock;
+    }
+    else if(selection.blockType == BlockSelection.TYPE_STONE) {
+      uv = this.uvStoneBlock;
+    }
+    else if(selection.blockType == BlockSelection.TYPE_DOOR) {
+      uv = this.uvWoodDoor;
+      type = ChunkBlock.TYPE_DOOR;
+    }
+    else {
+      console.log('unknown block type: ' + selection.blockType);
+      return false;
+    }
+
+    const block = this.makeBlock(location.x, location.y, location.z, 0xFF00FF, uv);
+    block.type = type;
+    this.paramMap_.add(block);
     this.buildNeighbors(manager);
     return true;
   }
